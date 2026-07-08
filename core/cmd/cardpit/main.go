@@ -1,21 +1,19 @@
 // cardpit — automatic memory-card ingestion station.
+//
+// Subcommands:
+//
+//	run        run the service (console or under the Windows SCM)
+//	install    register as a Windows service (auto-start)
+//	uninstall  remove the Windows service
+//	start/stop/restart/status
+//	tray       per-user tray icon (Windows; talks to the service via the API)
+//	version
 package main
 
 import (
-	"context"
-	"flag"
 	"fmt"
-	"log/slog"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
-
-	"github.com/mateusgms/cardpit/core/internal/app"
-	"github.com/mateusgms/cardpit/core/internal/config"
-	"github.com/mateusgms/cardpit/core/internal/httpapi"
-	"github.com/mateusgms/cardpit/core/internal/logging"
-	"github.com/mateusgms/cardpit/core/internal/notify"
 )
 
 var version = "dev"
@@ -26,52 +24,24 @@ func main() {
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
 	}
+
+	var err error
 	switch cmd {
 	case "run":
-		if err := runCmd(args); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
-		}
+		err = runCmd(args)
+	case "install", "uninstall", "start", "stop", "restart", "status":
+		err = svcCmd(cmd, args)
+	case "tray":
+		err = trayCmd(args)
 	case "version":
 		fmt.Println("cardpit", version)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: cardpit [run|version] [flags]\n", cmd)
+		fmt.Fprintf(os.Stderr,
+			"unknown command %q\nusage: cardpit [run|install|uninstall|start|stop|restart|status|tray|version] [flags]\n", cmd)
 		os.Exit(2)
 	}
-}
-
-func runCmd(args []string) error {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	cfgPath := fs.String("config", "config.yaml", "path to the bootstrap config file")
-	verbose := fs.Bool("v", false, "debug logging")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		return err
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
 	}
-	level := slog.LevelInfo
-	if *verbose {
-		level = slog.LevelDebug
-	}
-	log := logging.Setup(cfg.LogPath, level)
-	log.Info("cardpit starting", "version", version, "config", *cfgPath)
-
-	a, err := app.New(cfg, log)
-	if err != nil {
-		return err
-	}
-	defer a.Close()
-
-	srv := httpapi.New(a.DB, a.Bus, a.Watcher, a.Manager, a.Secrets, cfg.Listen, log)
-	disp := notify.NewDispatcher(a.DB, a.Bus, a.Secrets, log)
-	srv.TgTest = disp.Test
-	a.AddRunner(srv.Run)
-	a.AddRunner(disp.Run)
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	return a.Run(ctx)
 }
