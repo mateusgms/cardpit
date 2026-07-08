@@ -24,6 +24,7 @@ type statusResponse struct {
 	WatcherPaused bool                `json:"watcher_paused"`
 	Calibrating   *pendingCalibration `json:"calibrating,omitempty"`
 	UIPlaceholder bool                `json:"ui_placeholder"`
+	Version       string              `json:"version"`
 }
 
 type watcherVolume struct {
@@ -65,6 +66,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		WatcherPaused: s.watcher.Paused(),
 		Calibrating:   s.calibration.Load(),
 		UIPlaceholder: webui.IsPlaceholder(),
+		Version:       s.Version,
 	})
 }
 
@@ -140,6 +142,7 @@ var editableSettings = map[string]bool{
 	store.SetWatcherPaused:     true,
 	store.SetTelegramChatIDs:   true,
 	store.SetTelegramToken:     true, // sealed before storing
+	store.SetAutoUpdate:        true,
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +161,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		store.SetUnknownCardPolicy: "ask",
 		store.SetRequireDCIM:       "false",
 		store.SetWatcherPaused:     "false",
+		store.SetAutoUpdate:        "true",
 	}
 	for k, v := range defaults {
 		if _, ok := all[k]; !ok {
@@ -422,4 +426,15 @@ func (s *Server) handleTelegramTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "mensagem enviada"})
+}
+
+// --- update ------------------------------------------------------------------
+
+func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if s.CheckNow == nil {
+		writeErr(w, http.StatusConflict, "atualizador não disponível")
+		return
+	}
+	s.CheckNow()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "verificação iniciada"})
 }

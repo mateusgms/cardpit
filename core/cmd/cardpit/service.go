@@ -16,6 +16,7 @@ import (
 	"github.com/mateusgms/cardpit/core/internal/httpapi"
 	"github.com/mateusgms/cardpit/core/internal/logging"
 	"github.com/mateusgms/cardpit/core/internal/notify"
+	"github.com/mateusgms/cardpit/core/internal/update"
 )
 
 func svcConfig(absConfigPath string) *service.Config {
@@ -24,6 +25,11 @@ func svcConfig(absConfigPath string) *service.Config {
 		DisplayName: "cardpit — ingestão de cartões de memória",
 		Description: "Detecta cartões de memória, copia para o SSD com verificação de integridade e notifica via Telegram.",
 		Arguments:   []string{"run", "--config", absConfigPath},
+		Option: service.KeyValue{
+			"OnFailure":              "restart",
+			"OnFailureDelayDuration": "5s",
+			"OnFailureResetPeriod":   10,
+		},
 	}
 }
 
@@ -65,17 +71,26 @@ func (p *program) Stop(service.Service) error {
 
 // runApp wires and runs every component (shared by console and service).
 func runApp(ctx context.Context, cfg config.Config, log *slog.Logger) error {
+	// Remove leftover .old exe from any previous self-update swap.
+	update.Recover(log)
+
 	a, err := app.New(cfg, log)
 	if err != nil {
 		return err
 	}
 	defer a.Close()
 
+	exe, _ := os.Executable()
+	upd := update.New("mateusgms/cardpit", version, exe, a.DB, log)
+
 	srv := httpapi.New(a.DB, a.Bus, a.Watcher, a.Manager, a.Secrets, cfg.Listen, log)
+	srv.Version = version
+	srv.CheckNow = upd.TriggerCheck
 	disp := notify.NewDispatcher(a.DB, a.Bus, a.Secrets, log)
 	srv.TgTest = disp.Test
 	a.AddRunner(srv.Run)
 	a.AddRunner(disp.Run)
+	a.AddRunner(upd.Run)
 	return a.Run(ctx)
 }
 

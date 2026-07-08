@@ -74,6 +74,7 @@ export interface Status {
   watcher_paused: boolean
   calibrating?: { alias: string; armed_at: string; deadline: string }
   ui_placeholder: boolean
+  version: string
 }
 
 export interface JobEventPayload {

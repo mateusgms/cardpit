@@ -6,6 +6,8 @@
 //	install    register as a Windows service (auto-start)
 //	uninstall  remove the Windows service
 //	start/stop/restart/status
+//	setup      one-command install: write config, install + start service, print token (Windows, admin)
+//	token      print the DPAPI-unsealed API token (Windows)
 //	tray       per-user tray icon (Windows; talks to the service via the API)
 //	version
 package main
@@ -31,13 +33,17 @@ func main() {
 		err = runCmd(args)
 	case "install", "uninstall", "start", "stop", "restart", "status":
 		err = svcCmd(cmd, args)
+	case "setup":
+		err = setupCmd(args)
+	case "token":
+		err = tokenCmd(args)
 	case "tray":
 		err = trayCmd(args)
 	case "version":
 		fmt.Println("cardpit", version)
 	default:
 		fmt.Fprintf(os.Stderr,
-			"unknown command %q\nusage: cardpit [run|install|uninstall|start|stop|restart|status|tray|version] [flags]\n", cmd)
+			"uso: cardpit [run|install|uninstall|start|stop|restart|status|setup|token|tray|version] [flags]\n")
 		os.Exit(2)
 	}
 	if err != nil {

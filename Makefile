@@ -1,8 +1,9 @@
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOFLAGS  = -trimpath
 LDFLAGS  = -s -w -X main.version=$(VERSION)
+ZIPNAME  = cardpit-$(VERSION)-windows-amd64.zip
 
-.PHONY: all build release web dev check test fmt vet clean
+.PHONY: all build release web dev check test fmt vet buildwin checksums zip clean
 
 all: build
 
@@ -12,8 +13,20 @@ build:
 
 ## release: build the single-file Windows executable (UI embedded)
 release: web
+	mkdir -p dist
 	cd core && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
 		go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o ../dist/cardpit.exe ./cmd/cardpit
+
+## checksums: generate SHA-256 checksum file for the Windows exe
+checksums: release
+	cd dist && sha256sum cardpit.exe > checksums.txt
+
+## zip: create the all-in-one installer zip for distribution
+zip: checksums
+	cp packaging/config-release.yaml dist/config.yaml
+	cp packaging/setup.bat dist/setup.bat
+	cp packaging/INSTALL.md dist/INSTALL.md
+	cd dist && zip -j $(ZIPNAME) cardpit.exe checksums.txt config.yaml setup.bat INSTALL.md
 
 ## web: build the React UI and stage it for go:embed
 web:

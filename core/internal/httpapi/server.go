@@ -38,7 +38,9 @@ type Server struct {
 	log     *slog.Logger
 	listen  string
 
-	TgTest TelegramTester
+	TgTest   TelegramTester
+	Version  string // ldflags-injected build version, surfaced in /api/status
+	CheckNow func() // triggers an immediate update check; nil if updater absent
 
 	token       string // plaintext API token, loaded/generated at startup
 	calibration atomic.Pointer[pendingCalibration]
@@ -143,6 +145,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/slots/calibrate", s.handleCalibrate)
 	mux.HandleFunc("DELETE /api/slots/calibrate", s.handleCancelCalibrate)
 	mux.HandleFunc("POST /api/telegram/test", s.handleTelegramTest)
+	mux.HandleFunc("POST /api/update/check", s.handleUpdateCheck)
 
 	dist, err := fs.Sub(webui.Dist, "dist")
 	if err != nil {
