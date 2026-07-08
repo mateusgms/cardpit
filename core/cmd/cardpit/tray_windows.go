@@ -9,9 +9,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"net"
 	"net/http"
-	"os/exec"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -62,14 +60,6 @@ func readAPIToken(dbPath string) (string, error) {
 	return string(plain), nil
 }
 
-func baseURL(listen string) string {
-	_, port, err := net.SplitHostPort(listen)
-	if err != nil {
-		port = "8532"
-	}
-	return "http://localhost:" + port
-}
-
 type tray struct {
 	baseURL string
 	token   string
@@ -104,7 +94,7 @@ func (t *tray) onReady() {
 		for {
 			select {
 			case <-open.ClickedCh:
-				exec.Command("cmd", "/c", "start", t.baseURL).Start()
+				openBrowser(t.baseURL)
 			case <-pause.ClickedCh:
 				target := "true"
 				if pause.Checked() {

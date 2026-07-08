@@ -7,6 +7,7 @@ import Cards from './pages/Cards'
 import Slots from './pages/Slots'
 import SettingsPage from './pages/Settings'
 import TokenPage from './pages/Token'
+import DiagnosticsPage from './pages/Diagnostics'
 import { api } from './api/client'
 import type { Status } from './api/types'
 
@@ -16,6 +17,7 @@ const tabs = [
   { to: '/cartoes', label: 'Cartões' },
   { to: '/slots', label: 'Slots' },
   { to: '/config', label: 'Configurações' },
+  { to: '/diagnostico', label: 'Diagnóstico' },
 ]
 
 export default function App() {
@@ -48,6 +50,7 @@ export default function App() {
         <Route path="/cartoes" element={<Cards />} />
         <Route path="/slots" element={<Slots />} />
         <Route path="/config" element={<SettingsPage />} />
+        <Route path="/diagnostico" element={<DiagnosticsPage />} />
         <Route path="/token" element={<TokenPage />} />
       </Routes>
     </div>

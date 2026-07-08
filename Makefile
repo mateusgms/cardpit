@@ -1,6 +1,9 @@
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOFLAGS  = -trimpath
 LDFLAGS  = -s -w -X main.version=$(VERSION)
+# Windows release links against the GUI subsystem so a double-click shows no
+# console window; CLI subcommands re-attach to the parent console at startup.
+LDFLAGS_WIN = $(LDFLAGS) -H=windowsgui
 ZIPNAME  = cardpit-$(VERSION)-windows-amd64.zip
 
 .PHONY: all build release web dev check test fmt vet buildwin checksums zip clean
@@ -15,7 +18,7 @@ build:
 release: web
 	mkdir -p dist
 	cd core && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
-		go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o ../dist/cardpit.exe ./cmd/cardpit
+		go build $(GOFLAGS) -ldflags "$(LDFLAGS_WIN)" -o ../dist/cardpit.exe ./cmd/cardpit
 
 ## checksums: generate SHA-256 checksum file for the Windows exe
 checksums: release
