@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/kardianos/service"
@@ -36,9 +39,12 @@ func svcConfig(absConfigPath string) *service.Config {
 // program adapts the app to kardianos/service. Start must return
 // immediately (SCM contract); the app runs in a goroutine.
 type program struct {
-	cfg     config.Config
-	verbose bool
-	log     *slog.Logger
+	cfg      config.Config
+	verbose  bool
+	log      *slog.Logger
+	ring     *logging.Ring
+	level    *slog.LevelVar
+	autoOpen bool // open the browser once the server is listening
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -50,7 +56,12 @@ func (p *program) Start(service.Service) error {
 	p.done = make(chan struct{})
 	go func() {
 		defer close(p.done)
-		if err := runApp(ctx, p.cfg, p.log); err != nil && ctx.Err() == nil {
+		if err := p.runApp(ctx, cancel); err != nil && ctx.Err() == nil {
+			if errors.Is(err, httpapi.ErrAddrInUse) {
+				// Another instance already owns the port: not a crash.
+				p.log.Info("cardpit já está em execução nesta porta; nada a fazer")
+				return
+			}
 			p.log.Error("cardpit terminated unexpectedly", "err", err)
 		}
 	}()
@@ -70,23 +81,34 @@ func (p *program) Stop(service.Service) error {
 }
 
 // runApp wires and runs every component (shared by console and service).
-func runApp(ctx context.Context, cfg config.Config, log *slog.Logger) error {
+// cancel backs the in-UI "Encerrar" button when running interactively.
+func (p *program) runApp(ctx context.Context, cancel context.CancelFunc) error {
 	// Remove leftover .old exe from any previous self-update swap.
-	update.Recover(log)
+	update.Recover(p.log)
 
-	a, err := app.New(cfg, log)
+	a, err := app.New(p.cfg, p.log)
 	if err != nil {
 		return err
 	}
 	defer a.Close()
 
 	exe, _ := os.Executable()
-	upd := update.New("mateusgms/cardpit", version, exe, a.DB, log)
+	upd := update.New("mateusgms/cardpit", version, exe, a.DB, p.log)
 
-	srv := httpapi.New(a.DB, a.Bus, a.Watcher, a.Manager, a.Secrets, cfg.Listen, log)
+	srv := httpapi.New(a.DB, a.Bus, a.Watcher, a.Manager, a.Secrets, p.cfg.Listen,
+		p.log, p.ring, p.level)
 	srv.Version = version
 	srv.CheckNow = upd.TriggerCheck
-	disp := notify.NewDispatcher(a.DB, a.Bus, a.Secrets, log)
+	srv.Platform = p.cfg.Platform
+	srv.DBPath = p.cfg.DBPath
+	srv.Interactive = service.Interactive()
+	if srv.Interactive {
+		srv.Shutdown = cancel // let the UI stop a user-launched worker
+	}
+	if p.autoOpen {
+		srv.OnReady = func(tok string) { go openBrowser(uiURL(p.cfg.Listen, tok)) }
+	}
+	disp := notify.NewDispatcher(a.DB, a.Bus, a.Secrets, p.log)
 	srv.TgTest = disp.Test
 	a.AddRunner(srv.Run)
 	a.AddRunner(disp.Run)
@@ -94,8 +116,59 @@ func runApp(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	return a.Run(ctx)
 }
 
-// runCmd handles `cardpit run` for both the console and the SCM: kardianos
-// Run() blocks on signals interactively and on SCM control otherwise.
+// runInteractive runs the worker in the foreground process (console double-
+// click or `cardpit open`), owning its own signal handling so the UI's
+// "Encerrar" button and Ctrl-C both stop the process cleanly.
+func (p *program) runInteractive() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	err := p.runApp(ctx, cancel)
+	if errors.Is(err, httpapi.ErrAddrInUse) {
+		// A sibling instance already serves the UI — open it instead of failing.
+		p.log.Info("cardpit já está em execução; abrindo o painel")
+		if p.autoOpen {
+			openBrowser(uiURL(p.cfg.Listen, apiTokenString(p.cfg)))
+		}
+		return nil
+	}
+	return err
+}
+
+// startService loads config, sets up logging, and runs the worker either in
+// the foreground (interactive) or under the service manager (SCM).
+func startService(cfgPath string, verbose, autoOpen bool) error {
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return err
+	}
+	level := slog.LevelInfo
+	if verbose {
+		level = slog.LevelDebug
+	}
+	log, levelVar, ring := logging.Setup(cfg.LogPath, level)
+	log.Info("cardpit starting", "version", version, "config", cfgPath,
+		"interactive", service.Interactive())
+
+	prg := &program{cfg: cfg, verbose: verbose, log: log, ring: ring,
+		level: levelVar, autoOpen: autoOpen}
+
+	if service.Interactive() {
+		return prg.runInteractive()
+	}
+
+	// Under the service manager: kardianos drives Start/Stop via the SCM.
+	abs, err := filepath.Abs(cfgPath)
+	if err != nil {
+		abs = cfgPath
+	}
+	s, err := service.New(prg, svcConfig(abs))
+	if err != nil {
+		return err
+	}
+	return s.Run()
+}
+
+// runCmd handles `cardpit run` for both the console and the SCM.
 func runCmd(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	cfgPath := fs.String("config", "config.yaml", "path to the bootstrap config file")
@@ -103,28 +176,8 @@ func runCmd(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	cfg, err := config.Load(*cfgPath)
-	if err != nil {
-		return err
-	}
-	level := slog.LevelInfo
-	if *verbose {
-		level = slog.LevelDebug
-	}
-	log := logging.Setup(cfg.LogPath, level)
-	log.Info("cardpit starting", "version", version, "config", *cfgPath,
-		"interactive", service.Interactive())
-
-	abs, err := filepath.Abs(*cfgPath)
-	if err != nil {
-		abs = *cfgPath
-	}
-	prg := &program{cfg: cfg, verbose: *verbose, log: log}
-	s, err := service.New(prg, svcConfig(abs))
-	if err != nil {
-		return err
-	}
-	return s.Run()
+	// Interactive `run` opens the browser too, matching the double-click flow.
+	return startService(*cfgPath, *verbose, service.Interactive())
 }
 
 // svcCmd handles install/uninstall/start/stop/status.

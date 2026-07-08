@@ -1,5 +1,27 @@
 // Mirrors of the Go JSON DTOs.
 
+export interface LogRecord {
+  time: string
+  level: string
+  msg: string
+  attrs?: Record<string, unknown>
+}
+
+export interface Diagnostics {
+  version: string
+  platform: string
+  go_version: string
+  os: string
+  arch: string
+  listen: string
+  db_path: string
+  uptime_seconds: number
+  ui_placeholder: boolean
+  interactive: boolean
+  can_shutdown: boolean
+  log_level: string
+}
+
 export interface Card {
   id: number
   volume_serial: string

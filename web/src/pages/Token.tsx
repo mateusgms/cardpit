@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, setToken } from '../api/client'
 
@@ -7,15 +7,33 @@ export default function TokenPage() {
   const [err, setErr] = useState('')
   const nav = useNavigate()
 
-  const save = async () => {
-    setErr('')
-    setToken(value.trim())
+  const saveToken = async (tok: string): Promise<boolean> => {
+    setToken(tok)
     try {
       await api('/api/status')
       nav('/')
+      return true
     } catch {
       setErr('Token rejeitado pelo serviço. Confira o valor exibido no primeiro boot (log do cardpit).')
+      return false
     }
+  }
+
+  // Auto-login when the launcher opens /token?t=<token> — the user never has
+  // to copy the token by hand. The token is stripped from the URL afterwards.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('t')
+    if (t) {
+      window.history.replaceState({}, '', window.location.pathname)
+      void saveToken(t.trim())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const save = () => {
+    setErr('')
+    void saveToken(value.trim())
   }
 
   return (

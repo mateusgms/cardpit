@@ -17,6 +17,7 @@ import (
 
 	"github.com/mateusgms/cardpit/core/internal/bus"
 	"github.com/mateusgms/cardpit/core/internal/engine"
+	"github.com/mateusgms/cardpit/core/internal/logging"
 	"github.com/mateusgms/cardpit/core/internal/platform/fake"
 	"github.com/mateusgms/cardpit/core/internal/secret"
 	"github.com/mateusgms/cardpit/core/internal/store"
@@ -45,7 +46,7 @@ func newTestServer(t *testing.T) *testServer {
 	w := watcher.New(p, b, watcher.Options{PollInterval: time.Hour, Debounce: 0}, discard)
 	m := engine.NewManager(db, p, b, discard)
 
-	s := New(db, b, w, m, secret.PlainBox{}, "127.0.0.1:0", discard)
+	s := New(db, b, w, m, secret.PlainBox{}, "127.0.0.1:0", discard, logging.NewRing(64), new(slog.LevelVar))
 	if err := s.initToken(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +102,7 @@ func TestAuth(t *testing.T) {
 func TestTokenPersistsAcrossRestart(t *testing.T) {
 	e := newTestServer(t)
 	first := e.s.token
-	s2 := New(e.db, e.bus, e.s.watcher, e.s.manager, secret.PlainBox{}, "", discard)
+	s2 := New(e.db, e.bus, e.s.watcher, e.s.manager, secret.PlainBox{}, "", discard, logging.NewRing(64), new(slog.LevelVar))
 	if err := s2.initToken(context.Background()); err != nil {
 		t.Fatal(err)
 	}

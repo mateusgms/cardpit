@@ -2,6 +2,7 @@
 //
 // Subcommands:
 //
+//	open       (default) open the web UI, starting the worker if needed
 //	run        run the service (console or under the Windows SCM)
 //	install    register as a Windows service (auto-start)
 //	uninstall  remove the Windows service
@@ -21,14 +22,21 @@ import (
 var version = "dev"
 
 func main() {
+	// Re-attach to the parent console (if any) so CLI subcommands still print
+	// under the GUI-subsystem release build; a no-op on a bare double-click.
+	attachParentConsole()
+
 	args := os.Args[1:]
-	cmd := "run"
+	// Bare launch (double-click) opens the friendly UI instead of a console.
+	cmd := "open"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
 	}
 
 	var err error
 	switch cmd {
+	case "open":
+		err = openCmd(args)
 	case "run":
 		err = runCmd(args)
 	case "install", "uninstall", "start", "stop", "restart", "status":
@@ -43,7 +51,7 @@ func main() {
 		fmt.Println("cardpit", version)
 	default:
 		fmt.Fprintf(os.Stderr,
-			"uso: cardpit [run|install|uninstall|start|stop|restart|status|setup|token|tray|version] [flags]\n")
+			"uso: cardpit [open|run|install|uninstall|start|stop|restart|status|setup|token|tray|version] [flags]\n")
 		os.Exit(2)
 	}
 	if err != nil {

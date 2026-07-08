@@ -16,15 +16,22 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/mateusgms/cardpit/core/internal/bus"
 	"github.com/mateusgms/cardpit/core/internal/engine"
 	"github.com/mateusgms/cardpit/core/internal/httpapi/webui"
+	"github.com/mateusgms/cardpit/core/internal/logging"
 	"github.com/mateusgms/cardpit/core/internal/secret"
 	"github.com/mateusgms/cardpit/core/internal/store"
 	"github.com/mateusgms/cardpit/core/internal/watcher"
 )
+
+// ErrAddrInUse is returned by Run when the listen address is already bound —
+// almost always another cardpit instance. Callers treat it as "already
+// running" (open the browser) rather than a fatal crash.
+var ErrAddrInUse = errors.New("httpapi: endereço já em uso")
 
 // TelegramTester is injected by the notify layer; nil means "not configured".
 type TelegramTester func(ctx context.Context) error
@@ -37,10 +44,20 @@ type Server struct {
 	secrets secret.SecretBox
 	log     *slog.Logger
 	listen  string
+	ring    *logging.Ring
+	level   *slog.LevelVar
 
 	TgTest   TelegramTester
 	Version  string // ldflags-injected build version, surfaced in /api/status
 	CheckNow func() // triggers an immediate update check; nil if updater absent
+
+	// Diagnostics context, set by the wiring layer after construction.
+	Platform    string       // "windows" | "fake"
+	DBPath      string       // absolute path to the SQLite database
+	Interactive bool         // true when user-launched (not under the service manager)
+	Shutdown    func()       // graceful stop; nil when managed by the service manager
+	OnReady     func(string) // called with the token once the listener is bound
+	startedAt   time.Time
 
 	token       string // plaintext API token, loaded/generated at startup
 	calibration atomic.Pointer[pendingCalibration]
@@ -53,10 +70,12 @@ type pendingCalibration struct {
 }
 
 func New(db *store.DB, b *bus.Bus, w *watcher.Watcher, m *engine.Manager,
-	secrets secret.SecretBox, listen string, log *slog.Logger) *Server {
+	secrets secret.SecretBox, listen string, log *slog.Logger,
+	ring *logging.Ring, level *slog.LevelVar) *Server {
 	return &Server{
 		db: db, bus: b, watcher: w, manager: m,
 		secrets: secrets, listen: listen, log: log,
+		ring: ring, level: level, startedAt: time.Now(),
 	}
 }
 
@@ -69,14 +88,25 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.watchCalibration(ctx)
 
 	srv := &http.Server{
-		Addr:              s.listen,
 		Handler:           s.routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
+	// Bind explicitly so we can turn "address already in use" into a clean
+	// "already running" signal instead of a fatal crash.
+	ln, err := net.Listen("tcp", s.listen)
+	if err != nil {
+		if errors.Is(err, syscall.EADDRINUSE) {
+			return ErrAddrInUse
+		}
+		return fmt.Errorf("httpapi: %w", err)
+	}
 	errCh := make(chan error, 1)
-	go func() { errCh <- srv.ListenAndServe() }()
+	go func() { errCh <- srv.Serve(ln) }()
 	s.log.Info("httpapi: listening", "addr", s.listen, "ui_placeholder", webui.IsPlaceholder())
+	if s.OnReady != nil {
+		s.OnReady(s.token)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -146,6 +176,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/slots/calibrate", s.handleCancelCalibrate)
 	mux.HandleFunc("POST /api/telegram/test", s.handleTelegramTest)
 	mux.HandleFunc("POST /api/update/check", s.handleUpdateCheck)
+	mux.HandleFunc("GET /api/logs", s.handleLogs)
+	mux.HandleFunc("POST /api/logs/level", s.handleSetLevel)
+	mux.HandleFunc("GET /api/diagnostics", s.handleDiagnostics)
+	mux.HandleFunc("POST /api/shutdown", s.handleShutdown)
 
 	dist, err := fs.Sub(webui.Dist, "dist")
 	if err != nil {
