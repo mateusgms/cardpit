@@ -15,6 +15,7 @@ import (
 	"github.com/mateusgms/cardpit/core/internal/config"
 	"github.com/mateusgms/cardpit/core/internal/httpapi"
 	"github.com/mateusgms/cardpit/core/internal/logging"
+	"github.com/mateusgms/cardpit/core/internal/notify"
 )
 
 var version = "dev"
@@ -65,7 +66,10 @@ func runCmd(args []string) error {
 	defer a.Close()
 
 	srv := httpapi.New(a.DB, a.Bus, a.Watcher, a.Manager, a.Secrets, cfg.Listen, log)
+	disp := notify.NewDispatcher(a.DB, a.Bus, a.Secrets, log)
+	srv.TgTest = disp.Test
 	a.AddRunner(srv.Run)
+	a.AddRunner(disp.Run)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

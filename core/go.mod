@@ -3,7 +3,11 @@ module github.com/mateusgms/cardpit/core
 go 1.25.0
 
 require (
+	github.com/fogleman/gg v1.3.0
+	github.com/go-telegram/bot v1.22.0
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/zeebo/xxh3 v1.1.0
+	golang.org/x/image v0.43.0
 	golang.org/x/sync v0.21.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
