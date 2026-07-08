@@ -396,6 +396,13 @@ func (m *Manager) Cancel(ctx context.Context, jobID int64) error {
 	return fmt.Errorf("job %d não está ativo", jobID)
 }
 
+// DestMounted reports whether the configured destination is currently
+// resolvable (for the status API).
+func (m *Manager) DestMounted(ctx context.Context) bool {
+	_, err := m.resolveDest(ctx)
+	return err == nil
+}
+
 // resolveDest maps the configured destination volume GUID to a mount path.
 func (m *Manager) resolveDest(ctx context.Context) (string, error) {
 	guid := m.db.Settings.GetString(ctx, store.SetDestVolumeGUID, "")

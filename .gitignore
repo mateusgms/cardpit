@@ -17,6 +17,10 @@ config.dev.yaml
 web/node_modules/
 web/dist/
 
+# staged UI build (placeholder index.html is committed; real build is not)
+core/internal/httpapi/webui/dist/*
+!core/internal/httpapi/webui/dist/index.html
+
 # editor
 .idea/
 .vscode/

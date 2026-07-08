@@ -13,6 +13,7 @@ import (
 
 	"github.com/mateusgms/cardpit/core/internal/app"
 	"github.com/mateusgms/cardpit/core/internal/config"
+	"github.com/mateusgms/cardpit/core/internal/httpapi"
 	"github.com/mateusgms/cardpit/core/internal/logging"
 )
 
@@ -62,6 +63,9 @@ func runCmd(args []string) error {
 		return err
 	}
 	defer a.Close()
+
+	srv := httpapi.New(a.DB, a.Bus, a.Watcher, a.Manager, a.Secrets, cfg.Listen, log)
+	a.AddRunner(srv.Run)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
