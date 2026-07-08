@@ -1,0 +1,22 @@
+# build outputs
+/dist/
+/out/
+*.exe
+
+# dev fixtures / local state
+/devcards/
+/devout/
+*.db
+*.db-wal
+*.db-shm
+config.yaml
+config.dev.yaml
+*.log
+
+# web
+web/node_modules/
+web/dist/
+
+# editor
+.idea/
+.vscode/

@@ -1,0 +1,31 @@
+# cardpit bootstrap configuration.
+# Only what is needed before the database is open lives here;
+# everything else is stored in SQLite and edited through the web UI.
+
+# Address the HTTP API + web UI listen on.
+listen: "0.0.0.0:8532"
+
+# Path to the SQLite database. Relative paths are resolved against
+# this file's directory.
+db_path: "cardpit.db"
+
+# Platform backend: "windows" (real syscalls) or "fake" (directory-based,
+# for development on any OS). Defaults to "windows" on Windows builds,
+# "fake" elsewhere.
+platform: "fake"
+
+# Fake platform only: directory whose first-level subdirectories are slots
+# and whose second-level subdirectories are inserted cards.
+# e.g. devcards/slot1/CARD01/DCIM/100MSDCF/IMG_0001.JPG
+fake_root: "devcards"
+
+# Fake platform only: directory that acts as the destination SSD
+# (resolved when dest_volume_guid setting is "fake-dest").
+fake_dest: "devout"
+
+# Log file path; empty logs to stderr only. JSON lines, rotated at 10 MiB.
+log_path: ""
+
+# Volume polling interval and attach debounce.
+poll_interval: 2s
+debounce: 3s
