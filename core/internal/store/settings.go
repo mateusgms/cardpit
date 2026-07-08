@@ -21,6 +21,7 @@ const (
 	SetTelegramToken     = "telegram_bot_token" // sealed
 	SetTelegramChatIDs   = "telegram_chat_ids"  // comma-separated allowlist
 	SetAPIToken          = "api_token"          // sealed
+	SetAutoUpdate        = "auto_update"        // "true" | "false", default true
 )
 
 type SettingsRepo struct{ db *sql.DB }

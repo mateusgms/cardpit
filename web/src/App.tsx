@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import History from './pages/History'
@@ -6,6 +7,8 @@ import Cards from './pages/Cards'
 import Slots from './pages/Slots'
 import SettingsPage from './pages/Settings'
 import TokenPage from './pages/Token'
+import { api } from './api/client'
+import type { Status } from './api/types'
 
 const tabs = [
   { to: '/', label: 'Painel' },
@@ -16,6 +19,12 @@ const tabs = [
 ]
 
 export default function App() {
+  const [version, setVersion] = useState('')
+
+  useEffect(() => {
+    api<Status>('/api/status').then((s) => setVersion(s.version)).catch(() => {})
+  }, [])
+
   return (
     <div className="layout">
       <nav className="top">
@@ -30,6 +39,7 @@ export default function App() {
             {t.label}
           </NavLink>
         ))}
+        {version && <span className="version-badge">{version}</span>}
       </nav>
       <Routes>
         <Route path="/" element={<Dashboard />} />

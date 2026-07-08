@@ -33,6 +33,7 @@ export default function SettingsPage() {
         unknown_card_policy: s.unknown_card_policy ?? 'ask',
         require_dcim: s.require_dcim ?? 'false',
         telegram_chat_ids: s.telegram_chat_ids ?? '',
+        auto_update: s.auto_update ?? 'true',
       }
       if (tgToken.trim()) body.telegram_bot_token = tgToken.trim()
       await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) })
@@ -54,6 +55,17 @@ export default function SettingsPage() {
     try {
       await api('/api/telegram/test', { method: 'POST' })
       setMsg('Mensagem de teste enviada ✔ — confira o Telegram.')
+    } catch (e) {
+      setErr((e as Error).message)
+    }
+  }
+
+  const checkUpdate = async () => {
+    setMsg('')
+    setErr('')
+    try {
+      await api('/api/update/check', { method: 'POST' })
+      setMsg('Verificação de atualização iniciada — acompanhe o log do serviço.')
     } catch (e) {
       setErr((e as Error).message)
     }
@@ -161,6 +173,24 @@ export default function SettingsPage() {
         <div className="row">
           <button onClick={tgTest}>Enviar mensagem de teste</button>
           <span className="muted">O notificador reinicia sozinho ao salvar token/chats.</span>
+        </div>
+      </div>
+
+      <h2>Atualização</h2>
+      <div className="card">
+        <label className="field">
+          <span>Atualização automática</span>
+          <select
+            value={s.auto_update ?? 'true'}
+            onChange={(e) => set('auto_update', e.target.value)}
+          >
+            <option value="true">ativada — verifica ao iniciar e a cada 24 h</option>
+            <option value="false">desativada</option>
+          </select>
+        </label>
+        <div className="row">
+          <button onClick={checkUpdate}>Verificar agora</button>
+          <span className="muted">Inicia uma verificação imediata em background.</span>
         </div>
       </div>
 
