@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -512,6 +513,50 @@ func TestParanoidModeCopies(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(dst); string(b) != "content" {
 		t.Fatalf("content: %q", b)
+	}
+}
+
+func TestConcurrentSameNameCopiesDoNotClobber(t *testing.T) {
+	c := newCopier()
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	const workers = 8
+	var wg sync.WaitGroup
+	errs := make([]error, workers)
+	for i := 0; i < workers; i++ {
+		src := filepath.Join(dir, fmt.Sprintf("card%d", i), "IMG_0001.JPG")
+		os.MkdirAll(filepath.Dir(src), 0o755)
+		body := strings.Repeat(fmt.Sprintf("%d", i), 1000)
+		os.WriteFile(src, []byte(body), 0o644)
+		info, _ := os.Stat(src)
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _, errs[i] = c.copyOne(context.Background(),
+				fileEntry{src: src, name: "IMG_0001.JPG", size: info.Size(), mtime: info.ModTime()},
+				out, false)
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("worker %d: %v", i, err)
+		}
+	}
+	files := listDest(t, out)
+	if len(files) != workers {
+		t.Fatalf("expected %d distinct files, got %v", workers, files)
+	}
+	seen := map[string]bool{}
+	for _, f := range files {
+		b, err := os.ReadFile(filepath.Join(out, f))
+		if err != nil || len(b) != 1000 {
+			t.Fatalf("file %s corrupt: len=%d err=%v", f, len(b), err)
+		}
+		if seen[string(b[:1])] {
+			t.Fatalf("duplicate content — a copy was clobbered: %v", files)
+		}
+		seen[string(b[:1])] = true
 	}
 }
 

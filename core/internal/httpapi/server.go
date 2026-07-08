@@ -113,9 +113,12 @@ func (s *Server) initToken(ctx context.Context) error {
 	if err := s.db.Settings.Set(ctx, store.SetAPIToken, sealedNew); err != nil {
 		return err
 	}
-	// Printed exactly once, on first boot — the user pastes this into the UI.
+	// Surfaced once, on first boot — the user pastes this into the UI.
+	// It goes to the log too because a Windows service has no console; the
+	// log file is admin-readable only (ProgramData), same trust boundary as
+	// the DPAPI-sealed settings.
 	fmt.Printf("\n=== cardpit: token de acesso gerado (primeiro boot) ===\n%s\n=======================================================\n\n", s.token)
-	s.log.Info("httpapi: first-boot API token generated")
+	s.log.Info("httpapi: first-boot API token generated", "token", s.token)
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ type copier struct {
 	retryDelays []time.Duration
 	renameMu    sync.Mutex
 	bufPool     sync.Pool
+	tmpSeq      atomic.Int64
 }
 
 func newCopier() *copier {
@@ -72,7 +74,10 @@ func (c *copier) copyOnce(ctx context.Context, entry fileEntry, dstDir string, p
 	}
 	defer src.Close()
 
-	tmpPath := filepath.Join(dstDir, entry.name+tmpSuffix)
+	// The sequence keeps tmp paths unique when concurrent jobs land files
+	// with the same name in the same date folder.
+	tmpPath := filepath.Join(dstDir,
+		fmt.Sprintf("%s.%d%s", entry.name, c.tmpSeq.Add(1), tmpSuffix))
 	tmp, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return "", "", err
