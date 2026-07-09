@@ -182,6 +182,26 @@ func (r *JobRepo) FindAwaitingBySerial(ctx context.Context, serial string) (Job,
 	return j, err
 }
 
+// RecentCompleted returns the last N jobs with status "done", newest first.
+func (r *JobRepo) RecentCompleted(ctx context.Context, limit int) ([]Job, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT `+jobCols+` FROM jobs WHERE status = ? ORDER BY id DESC LIMIT ?`,
+		StatusDone, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
 // FailInterrupted is boot recovery: anything mid-copy when the process died
 // becomes failed, and stale questions are cancelled (the watcher re-detects
 // still-inserted cards and re-asks).

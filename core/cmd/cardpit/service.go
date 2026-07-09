@@ -109,6 +109,7 @@ func (p *program) runApp(ctx context.Context, cancel context.CancelFunc) error {
 		srv.OnReady = func(tok string) { go openBrowser(uiURL(p.cfg.Listen, tok)) }
 	}
 	disp := notify.NewDispatcher(a.DB, a.Bus, a.Secrets, p.log)
+	disp.SetListenAddr(p.cfg.Listen)
 	srv.TgTest = disp.Test
 	a.AddRunner(srv.Run)
 	a.AddRunner(disp.Run)

@@ -79,7 +79,13 @@ type Dispatcher struct {
 	// throttle knobs (test-tunable)
 	editMinPct      int
 	editMinInterval time.Duration
+
+	listenAddr string // formatted by SetListenAddr; exposed to the /start handler
 }
+
+// SetListenAddr wires the HTTP listen address into the dispatcher so the
+// /start bot command can report where the web UI is reachable.
+func (d *Dispatcher) SetListenAddr(addr string) { d.listenAddr = addr }
 
 type jobMsgState struct {
 	msgRef     int64
@@ -333,6 +339,41 @@ func (d *Dispatcher) setNotifier(n Notifier) {
 	d.mu.Lock()
 	d.notifier = n
 	d.mu.Unlock()
+}
+
+// buildStatusInfo assembles a StatusInfo snapshot for the /start bot reply.
+func (d *Dispatcher) buildStatusInfo(ctx context.Context, chatID int64) StatusInfo {
+	info := StatusInfo{ChatID: chatID, ListenAddr: d.listenAddr}
+
+	dest := d.db.Settings.GetString(ctx, store.SetDestVolumeGUID, "")
+	info.DestConfigured = dest != ""
+
+	active, _ := d.db.Jobs.Active(ctx)
+	info.ActiveJobs = len(active)
+
+	recent, _ := d.db.Jobs.RecentCompleted(ctx, 5)
+	var totalDurSecs, totalBPS float64
+	n := 0
+	for _, j := range recent {
+		start, err1 := time.Parse(time.RFC3339, j.StartedAt)
+		end, err2 := time.Parse(time.RFC3339, j.FinishedAt)
+		if err1 != nil || err2 != nil || !end.After(start) {
+			continue
+		}
+		secs := end.Sub(start).Seconds()
+		if secs <= 0 {
+			continue
+		}
+		totalDurSecs += secs
+		totalBPS += float64(j.BytesCopied) / secs
+		n++
+	}
+	if n > 0 {
+		avgDur := time.Duration(totalDurSecs/float64(n)) * time.Second
+		info.AvgDuration = avgDur.Round(time.Second).String()
+		info.AvgThroughput = fmtBytes(int64(totalBPS / float64(n)))
+	}
+	return info
 }
 
 func parseChatIDs(raw string) []int64 {

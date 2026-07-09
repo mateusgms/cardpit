@@ -2,6 +2,7 @@ package notify
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -11,6 +12,54 @@ import (
 )
 
 // All user-facing Telegram strings live here, in pt-BR.
+
+// StatusInfo holds the data needed to build the /start status reply.
+type StatusInfo struct {
+	ChatID         int64
+	ListenAddr     string
+	DestConfigured bool
+	ActiveJobs     int
+	AvgDuration    string // e.g. "12m0s"; empty if no history
+	AvgThroughput  string // e.g. "420 MiB"; empty if no history
+}
+
+func msgBotStatus(info StatusInfo) string {
+	var b strings.Builder
+	if info.DestConfigured {
+		b.WriteString("✅ cardpit está ativo\n")
+	} else {
+		b.WriteString("⚠️ cardpit está ativo — destino não configurado\n")
+	}
+	fmt.Fprintf(&b, "\nSeu chat ID: %d\n", info.ChatID)
+	if info.ListenAddr != "" {
+		fmt.Fprintf(&b, "Painel web: %s\n", listenURL(info.ListenAddr))
+	}
+	b.WriteString("\nDestino: ")
+	if info.DestConfigured {
+		b.WriteString("configurado\n")
+	} else {
+		b.WriteString("não configurado\n")
+	}
+	fmt.Fprintf(&b, "Jobs ativos: %d\n", info.ActiveJobs)
+	if info.AvgDuration != "" && info.AvgThroughput != "" {
+		fmt.Fprintf(&b, "Média das últimas ingestões: %s · %s/s\n", info.AvgDuration, info.AvgThroughput)
+	}
+	b.WriteString("\nConfigure seu chat ID nas Configurações do cardpit para receber notificações.")
+	return b.String()
+}
+
+// listenURL converts a listen address (e.g. ":8532" or "0.0.0.0:8532") to a
+// human-readable URL using localhost.
+func listenURL(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+	return "http://" + host + ":" + port
+}
 
 func msgStart(in StartInfo) string {
 	ev := in.Ev
