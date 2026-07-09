@@ -90,3 +90,29 @@ func TestSeedTelegramToken(t *testing.T) {
 		}
 	})
 }
+
+func TestSeedSourcePrecedence(t *testing.T) {
+	box := secret.PlainBox{}
+	old := buildTelegramKey
+	t.Cleanup(func() { buildTelegramKey = old })
+
+	t.Run("build-time key used when env unset", func(t *testing.T) {
+		db, ctx := newSeedDB(t)
+		t.Setenv(EnvTelegramKey, "")
+		buildTelegramKey = "tok-build"
+		SeedTelegramTokenFromEnv(ctx, db, box, discard)
+		if got, _ := storedToken(t, ctx, db); got != "tok-build" {
+			t.Fatalf("token = %q; want tok-build", got)
+		}
+	})
+
+	t.Run("env var wins over build-time key", func(t *testing.T) {
+		db, ctx := newSeedDB(t)
+		t.Setenv(EnvTelegramKey, "tok-env")
+		buildTelegramKey = "tok-build"
+		SeedTelegramTokenFromEnv(ctx, db, box, discard)
+		if got, _ := storedToken(t, ctx, db); got != "tok-env" {
+			t.Fatalf("token = %q; want tok-env", got)
+		}
+	})
+}

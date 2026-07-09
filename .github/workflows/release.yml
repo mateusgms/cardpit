@@ -11,6 +11,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # DESKTOP holds the TELEGRAM_KEY secret stamped into the release exe.
+    environment: DESKTOP
     steps:
       - uses: actions/checkout@v4
 
@@ -26,12 +28,18 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Build release exe
+        env:
+          TELEGRAM_KEY: ${{ secrets.TELEGRAM_KEY }}
         run: make release VERSION=${{ github.ref_name }}
 
       - name: Generate checksums
+        env:
+          TELEGRAM_KEY: ${{ secrets.TELEGRAM_KEY }}
         run: make checksums VERSION=${{ github.ref_name }}
 
       - name: Create installer zip
+        env:
+          TELEGRAM_KEY: ${{ secrets.TELEGRAM_KEY }}
         run: make zip VERSION=${{ github.ref_name }}
 
       - name: Publish GitHub Release

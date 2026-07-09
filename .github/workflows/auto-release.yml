@@ -11,6 +11,8 @@ jobs:
   tag-and-release:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
+    # DESKTOP holds the TELEGRAM_KEY secret stamped into the release exe.
+    environment: DESKTOP
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,6 +124,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Build and package release
+        env:
+          TELEGRAM_KEY: ${{ secrets.TELEGRAM_KEY }}
         run: make zip VERSION=${{ steps.version.outputs.tag }}
 
       - name: Publish GitHub Release

@@ -15,12 +15,23 @@ import (
 // environment; locally it is a plain process/service env var.
 const EnvTelegramKey = "TELEGRAM_KEY"
 
-// SeedTelegramTokenFromEnv seals TELEGRAM_KEY into the settings on boot so a
+// buildTelegramKey is stamped into release binaries by the pipeline via
+// -ldflags "-X .../notify.buildTelegramKey=<token>" (see the Makefile), so a
+// distributed exe comes with Telegram pre-configured. The TELEGRAM_KEY env
+// var, when set, takes precedence over the stamped value.
+var buildTelegramKey string
+
+// SeedTelegramTokenFromEnv seals the pre-configured token (TELEGRAM_KEY env
+// var, falling back to the build-time stamp) into the settings on boot so a
 // fresh install comes up with Telegram already configured. A token entered
 // through the UI always wins: once telegram_token_source is "ui" (or a token
-// predates the marker) the env var is ignored.
+// predates the marker) the pre-configured value is ignored.
 func SeedTelegramTokenFromEnv(ctx context.Context, db *store.DB, secrets secret.SecretBox, log *slog.Logger) {
-	seedTelegramToken(ctx, db, secrets, log, strings.TrimSpace(os.Getenv(EnvTelegramKey)))
+	token := strings.TrimSpace(os.Getenv(EnvTelegramKey))
+	if token == "" {
+		token = strings.TrimSpace(buildTelegramKey)
+	}
+	seedTelegramToken(ctx, db, secrets, log, token)
 }
 
 func seedTelegramToken(ctx context.Context, db *store.DB, secrets secret.SecretBox, log *slog.Logger, token string) {
@@ -54,5 +65,6 @@ func seedTelegramToken(ctx context.Context, db *store.DB, secrets secret.SecretB
 		log.Error("notify: storing telegram token source", "err", err)
 		return
 	}
-	log.Info("notify: telegram token configurado a partir de " + EnvTelegramKey)
+	log.Info("notify: telegram token pré-configurado aplicado (env " +
+		EnvTelegramKey + " ou build)")
 }
