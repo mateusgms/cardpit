@@ -35,7 +35,7 @@ type Updater struct {
 	log     *slog.Logger
 	apiBase string // injectable for tests; default defaultAPIBase
 
-	checkNow chan struct{} // buffered(1); TriggerCheck sends, Run drains
+	checkNow chan bool // buffered(1); true = manual/forced (bypasses auto_update), false = automatic
 
 	// activeJobs returns the number of running/pending jobs. Injected for tests.
 	activeJobs func(ctx context.Context) (int, error)
@@ -50,7 +50,7 @@ func New(repo, version, exePath string, db *store.DB, log *slog.Logger) *Updater
 		db:       db,
 		log:      log,
 		apiBase:  defaultAPIBase,
-		checkNow: make(chan struct{}, 1),
+		checkNow: make(chan bool, 1),
 	}
 	u.activeJobs = func(ctx context.Context) (int, error) {
 		jobs, err := db.Jobs.Active(ctx)
@@ -59,10 +59,11 @@ func New(repo, version, exePath string, db *store.DB, log *slog.Logger) *Updater
 	return u
 }
 
-// TriggerCheck asks the updater to run an immediate check. Non-blocking.
+// TriggerCheck asks the updater to run an immediate manual check, bypassing
+// the auto_update setting. Non-blocking.
 func (u *Updater) TriggerCheck() {
 	select {
-	case u.checkNow <- struct{}{}:
+	case u.checkNow <- true:
 	default:
 	}
 }
@@ -74,14 +75,16 @@ func (u *Updater) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// Wait for startup delay or a manual trigger before the first check.
+	forced := false
 	select {
 	case <-ctx.Done():
 		return nil
 	case <-time.After(startupDelay):
-	case <-u.checkNow:
+	case forced = <-u.checkNow:
 	}
 
-	u.tryUpdate(ctx)
+	u.tryUpdate(ctx, forced)
 
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
@@ -90,15 +93,15 @@ func (u *Updater) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			u.tryUpdate(ctx)
-		case <-u.checkNow:
-			u.tryUpdate(ctx)
+			u.tryUpdate(ctx, false)
+		case forced = <-u.checkNow:
+			u.tryUpdate(ctx, forced)
 		}
 	}
 }
 
-func (u *Updater) tryUpdate(ctx context.Context) {
-	if !u.db.Settings.GetBool(ctx, store.SetAutoUpdate, true) {
+func (u *Updater) tryUpdate(ctx context.Context, force bool) {
+	if !force && !u.db.Settings.GetBool(ctx, store.SetAutoUpdate, true) {
 		u.log.Debug("update: auto_update disabled, skipping")
 		return
 	}
