@@ -39,7 +39,11 @@ sempre embute a UI real.
 3. O **primeiro boot imprime o token de acesso** no log — guarde-o.
 4. Abra `http://localhost:8532`, cole o token e configure:
    - o volume GUID do SSD de destino (`Get-Volume` no PowerShell);
-   - o bot do Telegram (token + chat_id) — use "Enviar mensagem de teste";
+   - o bot do Telegram (token + chat_id) — use "Enviar mensagem de teste".
+     Se a variável de ambiente `TELEGRAM_KEY` estiver definida no boot
+     (ex.: secret de um GitHub Environment no CI, ou variável do serviço),
+     o token já vem configurado e o campo da UI serve só para trocá-lo —
+     um token salvo pela UI passa a ter precedência sobre a variável;
    - calibre os slots na aba **Slots** (insira um cartão em cada leitor).
 5. Opcional: `cardpit.exe tray` na inicialização do usuário para o ícone
    de bandeja (o serviço roda em Session 0 e não pode ter tray próprio).

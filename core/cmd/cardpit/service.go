@@ -108,6 +108,9 @@ func (p *program) runApp(ctx context.Context, cancel context.CancelFunc) error {
 	if p.autoOpen {
 		srv.OnReady = func(tok string) { go openBrowser(uiURL(p.cfg.Listen, tok)) }
 	}
+	// Seed the Telegram token from TELEGRAM_KEY before the dispatcher's first
+	// supervise tick, so a fresh install starts with the notifier configured.
+	notify.SeedTelegramTokenFromEnv(ctx, a.DB, a.Secrets, p.log)
 	disp := notify.NewDispatcher(a.DB, a.Bus, a.Secrets, p.log)
 	disp.SetListenAddr(p.cfg.Listen)
 	srv.TgTest = disp.Test
