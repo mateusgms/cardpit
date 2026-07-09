@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v0.1.7] - 2026-07-09
+
+### Added
+- embute o token do Telegram no exe durante o build
+- pré-configura o token do Telegram via TELEGRAM_KEY
+
+
 ## [v0.1.6] - 2026-07-09
 
 ### Fixed
