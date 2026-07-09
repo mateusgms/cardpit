@@ -219,6 +219,13 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if k == store.SetTelegramToken {
+			// A UI-entered token wins over TELEGRAM_KEY on future boots.
+			if err := s.db.Settings.Set(ctx, store.SetTelegramTokenSrc, store.TokenSourceUI); err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
 		if k == store.SetWatcherPaused {
 			s.watcher.SetPaused(v == "true")
 		}

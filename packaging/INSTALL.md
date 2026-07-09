@@ -17,7 +17,9 @@ Nenhum. Apenas o arquivo `cardpit.exe` (Windows x64).
 4. Abra **http://localhost:8532** no navegador e cole o token
 5. Configure na interface:
    - **Volume GUID do SSD** de destino (`Get-Volume | Select FriendlyName,Path` no PowerShell)
-   - **Bot do Telegram** (token + chat_id) — teste com "Enviar mensagem de teste"
+   - **Bot do Telegram** — o token já vem embutido nas versões oficiais
+     ("já configurado" na tela); informe apenas o **chat_id** e teste com
+     "Enviar mensagem de teste". O campo de token serve só para trocar de bot.
    - **Slots** na aba Slots (insira um cartão em cada leitor para calibrar)
 
 O serviço inicia automaticamente com o Windows e reinicia sozinho em caso de falha.
