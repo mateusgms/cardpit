@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   tag-and-release:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,10 +29,84 @@ jobs:
           echo "tag=${next}" >> "$GITHUB_OUTPUT"
           echo "Next version: ${next}"
 
-      - name: Create and push tag
+      - name: Generate release notes
+        id: notes
+        run: |
+          prev_tag=$(git tag --list 'v*' --sort=-version:refname | head -1)
+          if [ -z "$prev_tag" ]; then
+            raw_log=$(git log --pretty=format:"%s")
+          else
+            raw_log=$(git log "${prev_tag}..HEAD" --pretty=format:"%s")
+          fi
+
+          feat_items=$(printf "%s\n" "$raw_log" \
+            | grep -E '^feat(\([^)]+\))?:' \
+            | sed -E 's/^feat(\([^)]+\))?: /- /')
+          fix_items=$(printf "%s\n" "$raw_log" \
+            | grep -E '^fix(\([^)]+\))?:' \
+            | sed -E 's/^fix(\([^)]+\))?: /- /')
+
+          {
+            echo "notes<<NOTES_EOF"
+            if [ -n "$feat_items" ]; then
+              echo "### Added"
+              printf "%s\n" "$feat_items"
+              echo ""
+            fi
+            if [ -n "$fix_items" ]; then
+              echo "### Fixed"
+              printf "%s\n" "$fix_items"
+            fi
+            if [ -z "$feat_items" ] && [ -z "$fix_items" ]; then
+              echo "No notable user-facing changes."
+            fi
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update CHANGELOG.md
+        env:
+          VERSION: ${{ steps.version.outputs.tag }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
+        run: |
+          python3 << 'PYEOF'
+          import os, sys
+          from datetime import date
+
+          version = os.environ["VERSION"]
+          notes   = os.environ["RELEASE_NOTES"]
+          today   = date.today().isoformat()
+
+          new_entry = f"## [{version}] - {today}\n\n{notes}\n\n"
+
+          with open("CHANGELOG.md") as f:
+              content = f.read()
+
+          marker = "## [Unreleased]\n"
+          idx = content.find(marker)
+          if idx == -1:
+              print("ERROR: '## [Unreleased]' marker not found in CHANGELOG.md", file=sys.stderr)
+              sys.exit(1)
+
+          insert_pos = idx + len(marker)
+          rest = content[insert_pos:].lstrip("\n")
+          new_content = content[:insert_pos] + "\n" + new_entry + rest
+
+          with open("CHANGELOG.md", "w") as f:
+              f.write(new_content)
+
+          print(f"CHANGELOG.md updated with {version}")
+          PYEOF
+
+      - name: Commit and push CHANGELOG.md
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: update CHANGELOG for ${{ steps.version.outputs.tag }} [skip ci]"
+          git push origin HEAD:main
+
+      - name: Create and push tag
+        run: |
           git tag ${{ steps.version.outputs.tag }}
           git push origin ${{ steps.version.outputs.tag }}
 
@@ -53,6 +128,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          body: ${{ steps.notes.outputs.notes }}
           files: |
             dist/cardpit.exe
             dist/checksums.txt
