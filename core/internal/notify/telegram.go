@@ -222,10 +222,23 @@ func (d *Dispatcher) buildTelegram(ctx context.Context, token string, chats []in
 		})
 	}
 
+	// /start and /chatid reply to anyone (not restricted to the allowlist) so
+	// users can discover their chat_id before they are configured.
+	statusHandler := func(hctx context.Context, b *bot.Bot, update *models.Update) {
+		if update.Message == nil {
+			return
+		}
+		chatID := update.Message.Chat.ID
+		info := d.buildStatusInfo(hctx, chatID)
+		b.SendMessage(hctx, &bot.SendMessageParams{ChatID: chatID, Text: msgBotStatus(info)})
+	}
+
 	b, err := bot.New(token, bot.WithDefaultHandler(handler))
 	if err != nil {
 		return nil, nil, fmt.Errorf("telegram: %w", err)
 	}
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/start", bot.MatchTypePrefix, statusHandler)
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/chatid", bot.MatchTypePrefix, statusHandler)
 	bctx, cancel := context.WithCancel(ctx)
 	go b.Start(bctx)
 	return &tgNotifier{client: realClient{b}, chats: chats}, cancel, nil
