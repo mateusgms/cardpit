@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v0.1.8] - 2026-07-10
+
+### Added
+- seletor de disco de destino, retomada imediata da fila e logs visíveis
+
+
 ## [v0.1.7] - 2026-07-09
 
 ### Added
