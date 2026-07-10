@@ -5,6 +5,7 @@ package win
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"golang.org/x/sys/windows"
@@ -19,7 +20,7 @@ type winPlatform struct{}
 func New() platform.Platform {
 	w := &winPlatform{}
 	return platform.Platform{
-		Volumes: w, Info: w, Slots: w, Eject: w, Dest: w, Space: w,
+		Volumes: w, Info: w, Slots: w, Eject: w, Dest: w, Space: w, DestList: w,
 	}
 }
 
@@ -47,6 +48,50 @@ func (w *winPlatform) ListRemovableVolumes(ctx context.Context) ([]platform.Volu
 			continue
 		}
 		out = append(out, platform.VolumeID{DriveLetter: letter, GUIDPath: guid})
+	}
+	return out, nil
+}
+
+// ListDestCandidates returns the fixed drives the user can pick as the copy
+// destination. The system drive is included but flagged.
+func (w *winPlatform) ListDestCandidates(ctx context.Context) ([]platform.DestCandidate, error) {
+	mask, err := windows.GetLogicalDrives()
+	if err != nil {
+		return nil, fmt.Errorf("GetLogicalDrives: %w", err)
+	}
+	sysDrive := strings.ToUpper(strings.TrimSuffix(os.Getenv("SystemDrive"), `\`)) // "C:"
+	var out []platform.DestCandidate
+	for i := 0; i < 26; i++ {
+		if mask&(1<<i) == 0 {
+			continue
+		}
+		letter := string(rune('A'+i)) + ":"
+		root, err := windows.UTF16PtrFromString(letter + `\`)
+		if err != nil {
+			continue
+		}
+		if windows.GetDriveType(root) != windows.DRIVE_FIXED {
+			continue
+		}
+		guid, err := volumeGUIDForRoot(letter + `\`)
+		if err != nil {
+			// Volume can vanish between the two calls; skip quietly.
+			continue
+		}
+		cand := platform.DestCandidate{
+			DriveLetter: letter,
+			GUIDPath:    guid,
+			System:      letter == sysDrive,
+		}
+		// Best effort: a BitLocker-locked or dying volume still shows up,
+		// just without label/sizes.
+		if info, err := w.VolumeInfo(ctx, platform.VolumeID{DriveLetter: letter, GUIDPath: guid}); err == nil {
+			cand.Label = info.Label
+			cand.Filesystem = info.Filesystem
+			cand.TotalBytes = info.TotalBytes
+			cand.FreeBytes = info.FreeBytes
+		}
+		out = append(out, cand)
 	}
 	return out, nil
 }

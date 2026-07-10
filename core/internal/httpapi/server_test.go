@@ -47,6 +47,7 @@ func newTestServer(t *testing.T) *testServer {
 	m := engine.NewManager(db, p, b, discard)
 
 	s := New(db, b, w, m, secret.PlainBox{}, "127.0.0.1:0", discard, logging.NewRing(64), new(slog.LevelVar))
+	s.DestCandidates = p.DestList
 	if err := s.initToken(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -293,6 +294,32 @@ func TestSSEStreamWithQueryToken(t *testing.T) {
 	resp2.Body.Close()
 	if resp2.StatusCode != 401 {
 		t.Fatalf("unauthenticated sse: %d", resp2.StatusCode)
+	}
+}
+
+func TestDestCandidatesEndpoint(t *testing.T) {
+	e := newTestServer(t)
+
+	if resp, _ := e.req(t, "GET", "/api/volumes/dest-candidates", "", nil); resp.StatusCode != 401 {
+		t.Fatalf("no token: %d", resp.StatusCode)
+	}
+
+	_, data := e.req(t, "GET", "/api/volumes/dest-candidates", e.s.token, nil)
+	var got struct {
+		Candidates []destCandidateDTO `json:"candidates"`
+	}
+	json.Unmarshal(data, &got)
+	// The fake platform offers its dest dir under the magic GUID.
+	if len(got.Candidates) != 1 || got.Candidates[0].VolumeGUID != "fake-dest" {
+		t.Fatalf("candidates: %s", data)
+	}
+
+	// Nil lister must degrade to an empty list, not a crash.
+	e.s.DestCandidates = nil
+	resp, data := e.req(t, "GET", "/api/volumes/dest-candidates", e.s.token, nil)
+	json.Unmarshal(data, &got)
+	if resp.StatusCode != 200 || len(got.Candidates) != 0 {
+		t.Fatalf("nil lister: %d %s", resp.StatusCode, data)
 	}
 }
 

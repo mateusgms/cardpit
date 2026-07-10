@@ -23,6 +23,7 @@ import (
 	"github.com/mateusgms/cardpit/core/internal/engine"
 	"github.com/mateusgms/cardpit/core/internal/httpapi/webui"
 	"github.com/mateusgms/cardpit/core/internal/logging"
+	"github.com/mateusgms/cardpit/core/internal/platform"
 	"github.com/mateusgms/cardpit/core/internal/secret"
 	"github.com/mateusgms/cardpit/core/internal/store"
 	"github.com/mateusgms/cardpit/core/internal/watcher"
@@ -52,12 +53,16 @@ type Server struct {
 	CheckNow func() // triggers an immediate update check; nil if updater absent
 
 	// Diagnostics context, set by the wiring layer after construction.
-	Platform    string       // "windows" | "fake"
-	DBPath      string       // absolute path to the SQLite database
-	Interactive bool         // true when user-launched (not under the service manager)
-	Shutdown    func()       // graceful stop; nil when managed by the service manager
-	OnReady     func(string) // called with the token once the listener is bound
-	startedAt   time.Time
+	Platform    string // "windows" | "fake"
+	DBPath      string // absolute path to the SQLite database
+	LogPath     string // log file path; empty means in-memory ring only
+	Interactive bool   // true when user-launched (not under the service manager)
+
+	// DestCandidates lists volumes offered as copy destination; nil-safe.
+	DestCandidates platform.DestCandidateLister
+	Shutdown       func()       // graceful stop; nil when managed by the service manager
+	OnReady        func(string) // called with the token once the listener is bound
+	startedAt      time.Time
 
 	token       string // plaintext API token, loaded/generated at startup
 	calibration atomic.Pointer[pendingCalibration]
@@ -162,6 +167,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/jobs", s.handleListJobs)
 	mux.HandleFunc("GET /api/jobs/{id}/files", s.handleJobFiles)
 	mux.HandleFunc("POST /api/jobs/{id}/cancel", s.handleCancelJob)
+	mux.HandleFunc("GET /api/volumes/dest-candidates", s.handleDestCandidates)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("GET /api/cards", s.handleListCards)

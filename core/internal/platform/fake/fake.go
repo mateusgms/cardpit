@@ -36,7 +36,7 @@ const (
 func New(root, destDir string) platform.Platform {
 	f := &fakePlatform{root: root, dest: destDir}
 	return platform.Platform{
-		Volumes: f, Info: f, Slots: f, Eject: f, Dest: f, Space: f,
+		Volumes: f, Info: f, Slots: f, Eject: f, Dest: f, Space: f, DestList: f,
 	}
 }
 
@@ -142,6 +142,23 @@ func (f *fakePlatform) ResolveDest(ctx context.Context, volumeGUID string) (stri
 		return f.dest, nil
 	}
 	return "", platform.ErrDestNotPresent
+}
+
+// ListDestCandidates offers the configured dest dir as the single candidate,
+// under the magic GUID "fake-dest" that ResolveDest accepts.
+func (f *fakePlatform) ListDestCandidates(ctx context.Context) ([]platform.DestCandidate, error) {
+	info, err := os.Stat(f.dest)
+	if err != nil || !info.IsDir() {
+		return nil, nil
+	}
+	free, _ := f.FreeSpace(ctx, f.dest)
+	return []platform.DestCandidate{{
+		GUIDPath:   "fake-dest",
+		Label:      "Destino fake (" + f.dest + ")",
+		Filesystem: "fakefs",
+		TotalBytes: free,
+		FreeBytes:  free,
+	}}, nil
 }
 
 // FreeSpace reports a huge default so tests never trip the space check by
