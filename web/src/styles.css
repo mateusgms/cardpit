@@ -53,6 +53,8 @@ h2 { font-size: 16px; margin: 16px 0 8px; color: var(--muted); }
 .tile.copying { outline: 2px solid var(--accent); }
 .tile.done { outline: 2px solid var(--ok); }
 .tile.error { outline: 2px solid var(--err); }
+.tile.attention { outline: 2px solid var(--warn); }
+.tile.attention .state { color: var(--warn); }
 
 .badge {
   display: inline-block; padding: 2px 8px; border-radius: 999px;

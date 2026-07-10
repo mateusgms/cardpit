@@ -56,7 +56,13 @@ export default function DiagnosticsPage() {
         body: JSON.stringify({ level: debugOn ? 'info' : 'debug' }),
       })
       await loadDiag()
-      setMsg(debugOn ? 'Modo debug desativado.' : 'Modo debug ativado — mais detalhes serão registrados.')
+      // Sync the table filter, otherwise the new debug lines stay invisible.
+      setFilter(debugOn ? 'info' : 'debug')
+      setMsg(
+        debugOn
+          ? 'Modo debug desativado — a tabela volta a mostrar a partir de info.'
+          : 'Modo debug ativado — a tabela abaixo agora exibe as linhas de debug.',
+      )
     } catch (e) {
       setErr((e as Error).message)
     }
@@ -74,6 +80,7 @@ export default function DiagnosticsPage() {
           `Go:          ${diag.go_version}`,
           `endereço:    ${diag.listen}`,
           `banco:       ${diag.db_path}`,
+          `arquivo log: ${diag.log_path || '(apenas em memória)'}`,
           `uptime:      ${diag.uptime_seconds}s`,
           `nível de log:${diag.log_level}`,
           `UI embutida: ${diag.ui_placeholder ? 'placeholder' : 'real'}`,
@@ -135,6 +142,12 @@ export default function DiagnosticsPage() {
               <tr><td className="muted">Endereço</td><td className="mono">{diag.listen}</td></tr>
               <tr><td className="muted">Tempo ligado</td><td className="mono">{diag.uptime_seconds}s</td></tr>
               <tr><td className="muted">Nível de log</td><td className="mono">{diag.log_level}</td></tr>
+              <tr>
+                <td className="muted">Arquivo de log</td>
+                <td className="mono">
+                  {diag.log_path || '— sem arquivo (logs apenas em memória; use Baixar relatório)'}
+                </td>
+              </tr>
             </tbody>
           </table>
         ) : (

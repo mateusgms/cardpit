@@ -53,6 +53,7 @@ func (r *jobRunner) run(ctx context.Context) error {
 	if err != nil {
 		return r.fail(dctx, ctx, fmt.Errorf("lendo o cartão: %w", err))
 	}
+	r.m.log.Debug("engine: card scanned", "job", r.jobID, "files", len(entries))
 
 	// 2. Dedup plan: decide what actually needs copying.
 	toCopy, skipped, err := r.planDedup(ctx, entries)
@@ -61,6 +62,8 @@ func (r *jobRunner) run(ctx context.Context) error {
 	}
 	r.filesSkipped = skipped
 	r.filesTotal = len(toCopy)
+	r.m.log.Debug("engine: dedup planned", "job", r.jobID,
+		"to_copy", len(toCopy), "skipped", skipped)
 	for _, e := range toCopy {
 		r.bytesTotal += e.size
 	}

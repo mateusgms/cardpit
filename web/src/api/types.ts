@@ -15,6 +15,7 @@ export interface Diagnostics {
   arch: string
   listen: string
   db_path: string
+  log_path: string
   uptime_seconds: number
   ui_placeholder: boolean
   interactive: boolean
@@ -87,10 +88,21 @@ export interface WatcherVolume {
   lun: number
 }
 
+export interface DestCandidate {
+  volume_guid: string
+  drive_letter: string
+  label: string
+  filesystem: string
+  total_bytes: number
+  free_bytes: number
+  system: boolean
+}
+
 export interface Status {
   slots: Slot[] | null
   volumes: WatcherVolume[] | null
   active_jobs: Job[] | null
+  blocked_job_ids: number[] | null
   dest_mounted: boolean
   dest_guid: string
   watcher_paused: boolean

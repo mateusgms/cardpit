@@ -230,6 +230,36 @@ func TestSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDestCandidates(t *testing.T) {
+	e := newTestServer(t)
+
+	// Requires auth like every /api route.
+	if resp, _ := e.req(t, "GET", "/api/volumes/dest-candidates", "", nil); resp.StatusCode != 401 {
+		t.Fatalf("no token: %d", resp.StatusCode)
+	}
+
+	// Nil lister answers an empty list, not an error.
+	resp, data := e.req(t, "GET", "/api/volumes/dest-candidates", e.s.token, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("nil lister: %d %s", resp.StatusCode, data)
+	}
+	var got struct {
+		Candidates []destCandidate `json:"candidates"`
+	}
+	json.Unmarshal(data, &got)
+	if got.Candidates == nil || len(got.Candidates) != 0 {
+		t.Fatalf("nil lister candidates: %+v", got)
+	}
+
+	e.s.DestCandidates = fake.New(t.TempDir(), t.TempDir()).DestList
+	_, data = e.req(t, "GET", "/api/volumes/dest-candidates", e.s.token, nil)
+	json.Unmarshal(data, &got)
+	if len(got.Candidates) != 1 || got.Candidates[0].VolumeGUID != "fake-dest" ||
+		got.Candidates[0].Label == "" || got.Candidates[0].System {
+		t.Fatalf("candidates: %+v", got)
+	}
+}
+
 func TestJobsPagination(t *testing.T) {
 	e := newTestServer(t)
 	ctx := context.Background()

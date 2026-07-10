@@ -27,6 +27,19 @@ type VolumeInfo struct {
 	Root       string // directory files are read from: "E:\" or the fake card dir
 }
 
+// DestCandidate is a fixed disk the user can pick as the ingest destination.
+// Label/Filesystem/sizes are best-effort: a locked BitLocker volume still
+// shows up, just with those fields empty.
+type DestCandidate struct {
+	DriveLetter string // "D:"
+	GUIDPath    string // "\\?\Volume{...}\"
+	Label       string
+	Filesystem  string
+	TotalBytes  uint64
+	FreeBytes   uint64
+	System      bool // the Windows system drive — usable, but flagged in the UI
+}
+
 // SlotKey is the stable identity of a physical reader slot: the USB location
 // path of the reader device plus the LUN (multi-slot readers expose several
 // volumes on one device, differing only by LUN).
@@ -64,6 +77,12 @@ type Ejector interface {
 	Eject(ctx context.Context, v VolumeID) error
 }
 
+type DestCandidateLister interface {
+	// ListDestCandidates returns the fixed disks that can serve as the
+	// destination. Called on demand from the UI, not on a hot path.
+	ListDestCandidates(ctx context.Context) ([]DestCandidate, error)
+}
+
 type DestResolver interface {
 	// ResolveDest maps a destination volume GUID to its current mount path,
 	// or ErrDestNotPresent. The destination may be a fixed drive.
@@ -76,10 +95,11 @@ type FreeSpacer interface {
 
 // Platform bundles the full set; app wiring picks the implementation.
 type Platform struct {
-	Volumes VolumeLister
-	Info    VolumeInfoReader
-	Slots   SlotResolver
-	Eject   Ejector
-	Dest    DestResolver
-	Space   FreeSpacer
+	Volumes  VolumeLister
+	Info     VolumeInfoReader
+	Slots    SlotResolver
+	Eject    Ejector
+	Dest     DestResolver
+	DestList DestCandidateLister
+	Space    FreeSpacer
 }

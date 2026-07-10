@@ -113,6 +113,27 @@ func TestDestResolution(t *testing.T) {
 	}
 }
 
+func TestListDestCandidates(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dest := filepath.Join(t.TempDir(), "ssd")
+	p := New(root, dest)
+
+	got, err := p.DestList.ListDestCandidates(ctx)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("missing dest: %v %v", got, err)
+	}
+
+	os.MkdirAll(dest, 0o755)
+	got, err = p.DestList.ListDestCandidates(ctx)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("existing dest: %v %v", got, err)
+	}
+	if got[0].GUIDPath != "fake-dest" || got[0].Label == "" || got[0].System {
+		t.Fatalf("candidate: %+v", got[0])
+	}
+}
+
 func TestFreeSpaceOverride(t *testing.T) {
 	p, _, dest := setup(t)
 	ctx := context.Background()

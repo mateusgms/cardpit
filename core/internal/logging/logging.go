@@ -106,10 +106,10 @@ func (h *ringHandler) Enabled(context.Context, slog.Level) bool { return true }
 func (h *ringHandler) Handle(_ context.Context, r slog.Record) error {
 	attrs := make(map[string]any, r.NumAttrs()+len(h.attrs))
 	for _, a := range h.attrs {
-		attrs[a.Key] = a.Value.Any()
+		attrs[a.Key] = attrValue(a.Value)
 	}
 	r.Attrs(func(a slog.Attr) bool {
-		attrs[a.Key] = a.Value.Any()
+		attrs[a.Key] = attrValue(a.Value)
 		return true
 	})
 	if len(attrs) == 0 {
@@ -122,6 +122,17 @@ func (h *ringHandler) Handle(_ context.Context, r slog.Record) error {
 		Attrs: attrs,
 	})
 	return nil
+}
+
+// attrValue makes attrs JSON-friendly for the diagnostics UI: an error value
+// would marshal to "{}", so it is stored as its message instead.
+func attrValue(v slog.Value) any {
+	if v.Kind() == slog.KindAny {
+		if err, ok := v.Any().(error); ok {
+			return err.Error()
+		}
+	}
+	return v.Any()
 }
 
 func (h *ringHandler) WithAttrs(as []slog.Attr) slog.Handler {

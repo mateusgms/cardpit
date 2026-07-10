@@ -19,6 +19,7 @@ type statusResponse struct {
 	Slots         []store.Slot        `json:"slots"`
 	Volumes       []watcherVolume     `json:"volumes"`
 	ActiveJobs    []store.Job         `json:"active_jobs"`
+	BlockedJobIDs []int64             `json:"blocked_job_ids"`
 	DestMounted   bool                `json:"dest_mounted"`
 	DestGUID      string              `json:"dest_guid"`
 	WatcherPaused bool                `json:"watcher_paused"`
@@ -61,6 +62,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		Slots:         slots,
 		Volumes:       vols,
 		ActiveJobs:    active,
+		BlockedJobIDs: s.manager.BlockedJobIDs(),
 		DestMounted:   s.manager.DestMounted(ctx),
 		DestGUID:      guid,
 		WatcherPaused: s.watcher.Paused(),
@@ -229,6 +231,11 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if k == store.SetWatcherPaused {
 			s.watcher.SetPaused(v == "true")
 		}
+		if k == store.SetDestVolumeGUID {
+			// Jobs parked waiting for a destination retry right away instead
+			// of waiting for the 30 s ticker.
+			s.manager.KickDestRetry()
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok",
 		"note": "max_concurrent_jobs requer reinício do serviço para valer"})
@@ -339,6 +346,45 @@ func (s *Server) handleCardDecision(w http.ResponseWriter, r *http.Request) {
 		Serial: body.Serial, Action: body.Action,
 	}})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// --- destination candidates ---------------------------------------------------
+
+type destCandidate struct {
+	VolumeGUID  string `json:"volume_guid"`
+	DriveLetter string `json:"drive_letter"`
+	Label       string `json:"label"`
+	Filesystem  string `json:"filesystem"`
+	TotalBytes  uint64 `json:"total_bytes"`
+	FreeBytes   uint64 `json:"free_bytes"`
+	System      bool   `json:"system"`
+}
+
+// handleDestCandidates lists fixed disks for the destination picker. The
+// timeout is short because Win32 volume calls can hang on a sleeping disk.
+func (s *Server) handleDestCandidates(w http.ResponseWriter, r *http.Request) {
+	out := []destCandidate{}
+	if s.DestCandidates != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		list, err := s.DestCandidates.ListDestCandidates(ctx)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "enumerando discos: "+err.Error())
+			return
+		}
+		for _, c := range list {
+			out = append(out, destCandidate{
+				VolumeGUID:  c.GUIDPath,
+				DriveLetter: c.DriveLetter,
+				Label:       c.Label,
+				Filesystem:  c.Filesystem,
+				TotalBytes:  c.TotalBytes,
+				FreeBytes:   c.FreeBytes,
+				System:      c.System,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"candidates": out})
 }
 
 // --- slots ------------------------------------------------------------------

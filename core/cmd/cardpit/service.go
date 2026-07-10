@@ -101,6 +101,8 @@ func (p *program) runApp(ctx context.Context, cancel context.CancelFunc) error {
 	srv.CheckNow = upd.TriggerCheck
 	srv.Platform = p.cfg.Platform
 	srv.DBPath = p.cfg.DBPath
+	srv.LogPath = p.cfg.LogPath
+	srv.DestCandidates = a.Platform.DestList
 	srv.Interactive = service.Interactive()
 	if srv.Interactive {
 		srv.Shutdown = cancel // let the UI stop a user-launched worker

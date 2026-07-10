@@ -30,7 +30,8 @@ type Manager struct {
 	log    *slog.Logger
 	copier *copier
 
-	sem chan struct{}
+	sem  chan struct{}
+	kick chan struct{} // wakes Run to retry blocked jobs right away
 
 	mu       sync.Mutex
 	byGUID   map[string]*runningJob // volumes with an admitted job
@@ -57,6 +58,7 @@ func NewManager(db *store.DB, p platform.Platform, b *bus.Bus, log *slog.Logger)
 		p:        p,
 		bus:      b,
 		log:      log,
+		kick:     make(chan struct{}, 1),
 		byGUID:   map[string]*runningJob{},
 		blocked:  map[int64]queuedJob{},
 		awaiting: map[string]queuedJob{},
@@ -97,12 +99,18 @@ func (m *Manager) Recover(ctx context.Context) error {
 
 // Run processes bus events until ctx is cancelled.
 func (m *Manager) Run(ctx context.Context) error {
-	maxJobs := m.db.Settings.GetInt(ctx, store.SetMaxConcurrent, 4)
-	if maxJobs < 1 {
-		maxJobs = 1
+	// Tests pre-set sem/copier before starting Run; keep those instances so
+	// jobs admitted directly don't race a reinitialization here.
+	if m.sem == nil {
+		maxJobs := m.db.Settings.GetInt(ctx, store.SetMaxConcurrent, 4)
+		if maxJobs < 1 {
+			maxJobs = 1
+		}
+		m.sem = make(chan struct{}, maxJobs)
 	}
-	m.sem = make(chan struct{}, maxJobs)
-	m.copier = newCopier()
+	if m.copier == nil {
+		m.copier = newCopier()
+	}
 
 	sub := m.bus.Subscribe(256,
 		bus.TopicVolumeAttached, bus.TopicVolumeDetached, bus.TopicCardDecision)
@@ -126,12 +134,39 @@ func (m *Manager) Run(ctx context.Context) error {
 			}
 		case <-destTicker.C:
 			m.retryBlocked(ctx)
+		case <-m.kick:
+			m.retryBlocked(ctx)
 		}
 	}
 }
 
+// KickDestRetry asks Run to retry blocked jobs now instead of waiting for the
+// next ticker — called when the destination setting changes. Non-blocking;
+// retryBlocked runs with the service-lifetime ctx, not the caller's.
+func (m *Manager) KickDestRetry() {
+	select {
+	case m.kick <- struct{}{}:
+	default:
+	}
+}
+
+// BlockedJobIDs lists the pending jobs parked waiting for the destination,
+// so the UI can say why they are queued.
+func (m *Manager) BlockedJobIDs() []int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids := make([]int64, 0, len(m.blocked))
+	for id := range m.blocked {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (m *Manager) handleAttach(ctx context.Context, va bus.VolumeAttached) {
+	m.log.Debug("engine: volume attached", "volume", va.VolumeGUID,
+		"serial", va.Serial, "label", va.Label)
 	if m.isTracked(va.VolumeGUID) {
+		m.log.Debug("engine: volume already tracked, ignoring", "volume", va.VolumeGUID)
 		return
 	}
 	if m.db.Settings.GetBool(ctx, store.SetRequireDCIM, false) && !hasDCIM(va.Root) {
@@ -214,6 +249,7 @@ func (m *Manager) createAndAdmit(ctx context.Context, va bus.VolumeAttached, car
 		m.log.Error("engine: creating job", "err", err)
 		return
 	}
+	m.log.Debug("engine: job created", "job", jobID, "card", cardAlias, "slot", slotAlias)
 	m.admit(ctx, queuedJob{jobID: jobID, vol: va, cardAlias: cardAlias, slotAlias: slotAlias})
 }
 
@@ -247,6 +283,7 @@ func (m *Manager) admit(ctx context.Context, q queuedJob) {
 		case m.sem <- struct{}{}:
 		}
 		defer func() { <-m.sem }()
+		m.log.Debug("engine: job admitted (concurrency slot acquired)", "job", q.jobID)
 
 		jctx, cancel := context.WithCancelCause(ctx)
 		defer cancel(nil)
@@ -286,8 +323,10 @@ func (m *Manager) retryBlocked(ctx context.Context) {
 	}
 	m.mu.Unlock()
 
+	m.log.Debug("engine: retrying jobs blocked on destination", "count", len(queued))
 	if _, err := m.resolveDest(ctx); err != nil {
-		return // still absent
+		m.log.Debug("engine: destination still absent", "err", err)
+		return
 	}
 	m.log.Info("engine: destination appeared, resuming blocked jobs", "count", len(queued))
 	for _, q := range queued {
@@ -407,7 +446,14 @@ func (m *Manager) DestMounted(ctx context.Context) bool {
 func (m *Manager) resolveDest(ctx context.Context) (string, error) {
 	guid := m.db.Settings.GetString(ctx, store.SetDestVolumeGUID, "")
 	if guid == "" {
+		m.log.Debug("engine: no destination volume configured")
 		return "", errDestMissing
 	}
-	return m.p.Dest.ResolveDest(ctx, guid)
+	root, err := m.p.Dest.ResolveDest(ctx, guid)
+	if err != nil {
+		m.log.Debug("engine: destination not resolvable", "guid", guid, "err", err)
+	} else {
+		m.log.Debug("engine: destination resolved", "guid", guid, "root", root)
+	}
+	return root, err
 }

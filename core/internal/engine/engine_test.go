@@ -383,6 +383,46 @@ func TestDestMissingThenAppears(t *testing.T) {
 	}
 }
 
+func TestKickDestRetryResumesBlockedJob(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Start unconfigured: newEnv points the setting at the (existing) fake
+	// dest, so clear it to reproduce the fresh-install state.
+	if err := e.db.Settings.Set(ctx, store.SetDestVolumeGUID, ""); err != nil {
+		t.Fatal(err)
+	}
+	sub := e.b.Subscribe(64)
+	defer sub.Close()
+	go e.m.Run(ctx)
+
+	e.insertCard(t, "slot1", "CARD01", map[string]testFile{"IMG.JPG": {"data", time.Now()}})
+	att := e.attach(t, "slot1", "CARD01")
+	e.db.Cards.Create(ctx, att.Serial, "CARD01", "A", "copy")
+	e.m.handleAttach(ctx, att)
+
+	waitTopic(t, sub, bus.TopicDestMissing)
+	waitFor(t, func() bool { return len(e.m.BlockedJobIDs()) == 1 })
+	jobID := e.m.BlockedJobIDs()[0]
+	if j, _ := e.db.Jobs.Get(ctx, jobID); j.Status != store.StatusPending {
+		t.Fatalf("job while blocked: %+v", j)
+	}
+
+	// Saving the destination kicks the retry: the job must complete well
+	// before the 30 s ticker would fire (waitTopic times out at 10 s).
+	if err := e.db.Settings.Set(ctx, store.SetDestVolumeGUID, "fake-dest"); err != nil {
+		t.Fatal(err)
+	}
+	e.m.KickDestRetry()
+	ev := waitTopic(t, sub, bus.TopicJobCompleted)
+	if je := ev.Payload.(bus.JobEvent); je.FilesCopied != 1 {
+		t.Fatalf("after kick: %+v", je)
+	}
+	if ids := e.m.BlockedJobIDs(); len(ids) != 0 {
+		t.Fatalf("still blocked: %v", ids)
+	}
+}
+
 func blockedJobID(m *Manager) int64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()

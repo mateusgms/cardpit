@@ -62,6 +62,7 @@ type diagnosticsResponse struct {
 	Arch          string `json:"arch"`
 	Listen        string `json:"listen"`
 	DBPath        string `json:"db_path"`
+	LogPath       string `json:"log_path"`
 	UptimeSeconds int64  `json:"uptime_seconds"`
 	UIPlaceholder bool   `json:"ui_placeholder"`
 	Interactive   bool   `json:"interactive"`
@@ -82,6 +83,7 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 		Arch:          runtime.GOARCH,
 		Listen:        s.listen,
 		DBPath:        s.DBPath,
+		LogPath:       s.LogPath,
 		UptimeSeconds: int64(time.Since(s.startedAt).Seconds()),
 		UIPlaceholder: webui.IsPlaceholder(),
 		Interactive:   s.Interactive,

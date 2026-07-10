@@ -23,6 +23,7 @@ import (
 	"github.com/mateusgms/cardpit/core/internal/engine"
 	"github.com/mateusgms/cardpit/core/internal/httpapi/webui"
 	"github.com/mateusgms/cardpit/core/internal/logging"
+	"github.com/mateusgms/cardpit/core/internal/platform"
 	"github.com/mateusgms/cardpit/core/internal/secret"
 	"github.com/mateusgms/cardpit/core/internal/store"
 	"github.com/mateusgms/cardpit/core/internal/watcher"
@@ -51,9 +52,14 @@ type Server struct {
 	Version  string // ldflags-injected build version, surfaced in /api/status
 	CheckNow func() // triggers an immediate update check; nil if updater absent
 
+	// DestCandidates lists the fixed disks offered by the destination picker;
+	// nil-safe (the endpoint answers an empty list).
+	DestCandidates platform.DestCandidateLister
+
 	// Diagnostics context, set by the wiring layer after construction.
 	Platform    string       // "windows" | "fake"
 	DBPath      string       // absolute path to the SQLite database
+	LogPath     string       // log file path; empty means in-memory only
 	Interactive bool         // true when user-launched (not under the service manager)
 	Shutdown    func()       // graceful stop; nil when managed by the service manager
 	OnReady     func(string) // called with the token once the listener is bound
@@ -169,6 +175,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/cards/{id}", s.handleUpdateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
 	mux.HandleFunc("POST /api/cards/decision", s.handleCardDecision)
+	mux.HandleFunc("GET /api/volumes/dest-candidates", s.handleDestCandidates)
 	mux.HandleFunc("GET /api/slots", s.handleListSlots)
 	mux.HandleFunc("PUT /api/slots/{id}", s.handleUpdateSlot)
 	mux.HandleFunc("DELETE /api/slots/{id}", s.handleDeleteSlot)

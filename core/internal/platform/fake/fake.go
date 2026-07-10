@@ -36,7 +36,7 @@ const (
 func New(root, destDir string) platform.Platform {
 	f := &fakePlatform{root: root, dest: destDir}
 	return platform.Platform{
-		Volumes: f, Info: f, Slots: f, Eject: f, Dest: f, Space: f,
+		Volumes: f, Info: f, Slots: f, Eject: f, Dest: f, DestList: f, Space: f,
 	}
 }
 
@@ -142,6 +142,19 @@ func (f *fakePlatform) ResolveDest(ctx context.Context, volumeGUID string) (stri
 		return f.dest, nil
 	}
 	return "", platform.ErrDestNotPresent
+}
+
+// ListDestCandidates offers the fake destination directory when it exists,
+// mirroring how a fixed disk only shows up on Windows once it is mounted.
+func (f *fakePlatform) ListDestCandidates(ctx context.Context) ([]platform.DestCandidate, error) {
+	if info, err := os.Stat(f.dest); err != nil || !info.IsDir() {
+		return nil, nil
+	}
+	return []platform.DestCandidate{{
+		GUIDPath:   "fake-dest",
+		Label:      "Destino fake (" + f.dest + ")",
+		Filesystem: "fakefs",
+	}}, nil
 }
 
 // FreeSpace reports a huge default so tests never trip the space check by

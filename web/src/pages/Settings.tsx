@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Settings } from '../api/types'
+import DestPicker from '../components/DestPicker'
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings>({})
@@ -78,18 +79,13 @@ export default function SettingsPage() {
       <h2>Destino</h2>
       <div className="card">
         <label className="field">
-          <span>Volume GUID do SSD de destino</span>
-          <input
+          <span>SSD de destino</span>
+          <DestPicker
             value={s.dest_volume_guid ?? ''}
-            onChange={(e) => set('dest_volume_guid', e.target.value)}
-            placeholder={'\\\\?\\Volume{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}\\'}
+            onChange={(guid) => set('dest_volume_guid', guid)}
           />
         </label>
-        <p className="muted">
-          No Windows: <code className="mono">Get-Volume | Select FriendlyName, Path</code> no
-          PowerShell. No modo de desenvolvimento (fake), use <code className="mono">fake-dest</code>.
-          A cópia nunca usa outro destino se este não estiver montado.
-        </p>
+        <p className="muted">A cópia nunca usa outro destino se este não estiver montado.</p>
         <label className="field">
           <span>Template de pastas (tokens: {'{YYYY-MM-DD} {YYYY} {MM} {DD} {card_alias}'})</span>
           <input
