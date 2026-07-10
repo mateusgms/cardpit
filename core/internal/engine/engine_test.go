@@ -383,6 +383,48 @@ func TestDestMissingThenAppears(t *testing.T) {
 	}
 }
 
+func TestKickDestRetryResumesBlockedJob(t *testing.T) {
+	root := t.TempDir()
+	dest := filepath.Join(t.TempDir(), "ssd") // does not exist yet
+	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	db.Settings.Set(ctx, store.SetDestVolumeGUID, "fake-dest")
+	b := bus.New()
+	m := NewManager(db, fake.New(root, dest), b, discard)
+	e := &env{m: m, b: b, db: db, root: root, dest: dest}
+
+	sub := b.Subscribe(64)
+	defer sub.Close()
+	go m.Run(ctx)
+
+	e.insertCard(t, "slot1", "CARD01", map[string]testFile{"IMG.JPG": {"data", time.Now()}})
+	att := e.attach(t, "slot1", "CARD01")
+	db.Cards.Create(ctx, att.Serial, "CARD01", "A", "copy")
+	// Run subscribes on start; republish until the attach is picked up
+	// (duplicates are deduped by isTracked).
+	waitFor(t, func() bool {
+		b.Publish(bus.Event{Topic: bus.TopicVolumeAttached, Payload: att})
+		_, total, _ := db.Jobs.ListPage(ctx, 10, 0)
+		return total >= 1
+	})
+	waitTopic(t, sub, bus.TopicDestMissing)
+	waitFor(t, func() bool { return len(m.BlockedJobIDs()) == 1 })
+
+	// SSD appears and the settings handler kicks: the job must resume well
+	// before the 30s ticker (waitTopic times out at 10s).
+	os.MkdirAll(dest, 0o755)
+	m.KickDestRetry()
+	ev := waitTopic(t, sub, bus.TopicJobCompleted)
+	if je := ev.Payload.(bus.JobEvent); je.FilesCopied != 1 {
+		t.Fatalf("after kick: %+v", je)
+	}
+}
+
 func blockedJobID(m *Manager) int64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()

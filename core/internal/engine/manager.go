@@ -30,7 +30,8 @@ type Manager struct {
 	log    *slog.Logger
 	copier *copier
 
-	sem chan struct{}
+	sem  chan struct{}
+	kick chan struct{} // wakes retryBlocked outside the 30s tick
 
 	mu       sync.Mutex
 	byGUID   map[string]*runningJob // volumes with an admitted job
@@ -57,6 +58,7 @@ func NewManager(db *store.DB, p platform.Platform, b *bus.Bus, log *slog.Logger)
 		p:        p,
 		bus:      b,
 		log:      log,
+		kick:     make(chan struct{}, 1),
 		byGUID:   map[string]*runningJob{},
 		blocked:  map[int64]queuedJob{},
 		awaiting: map[string]queuedJob{},
@@ -126,12 +128,17 @@ func (m *Manager) Run(ctx context.Context) error {
 			}
 		case <-destTicker.C:
 			m.retryBlocked(ctx)
+		case <-m.kick:
+			m.retryBlocked(ctx)
 		}
 	}
 }
 
 func (m *Manager) handleAttach(ctx context.Context, va bus.VolumeAttached) {
+	m.log.Debug("engine: volume attached",
+		"volume", va.VolumeGUID, "serial", va.Serial, "label", va.Label, "root", va.Root)
 	if m.isTracked(va.VolumeGUID) {
+		m.log.Debug("engine: volume already tracked, ignoring", "volume", va.VolumeGUID)
 		return
 	}
 	if m.db.Settings.GetBool(ctx, store.SetRequireDCIM, false) && !hasDCIM(va.Root) {
@@ -214,6 +221,8 @@ func (m *Manager) createAndAdmit(ctx context.Context, va bus.VolumeAttached, car
 		m.log.Error("engine: creating job", "err", err)
 		return
 	}
+	m.log.Debug("engine: job created",
+		"job", jobID, "card", cardAlias, "slot", slotAlias)
 	m.admit(ctx, queuedJob{jobID: jobID, vol: va, cardAlias: cardAlias, slotAlias: slotAlias})
 }
 
@@ -247,6 +256,7 @@ func (m *Manager) admit(ctx context.Context, q queuedJob) {
 		case m.sem <- struct{}{}:
 		}
 		defer func() { <-m.sem }()
+		m.log.Debug("engine: job admitted", "job", q.jobID, "card", q.cardAlias)
 
 		jctx, cancel := context.WithCancelCause(ctx)
 		defer cancel(nil)
@@ -271,7 +281,32 @@ func (m *Manager) admit(ctx context.Context, q queuedJob) {
 			m.blocked[q.jobID] = q
 		}
 		m.mu.Unlock()
+		if err == errDestMissing {
+			m.log.Info("engine: job waiting for destination",
+				"job", q.jobID, "card", q.cardAlias)
+		}
 	}()
+}
+
+// KickDestRetry asks the run loop to retry destination-blocked jobs now,
+// instead of on the next 30s tick. Non-blocking; safe from any goroutine.
+func (m *Manager) KickDestRetry() {
+	select {
+	case m.kick <- struct{}{}:
+	default:
+	}
+}
+
+// BlockedJobIDs returns the jobs currently parked waiting for the
+// destination, so the status API can explain why they sit in the queue.
+func (m *Manager) BlockedJobIDs() []int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids := make([]int64, 0, len(m.blocked))
+	for id := range m.blocked {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (m *Manager) retryBlocked(ctx context.Context) {
@@ -287,6 +322,8 @@ func (m *Manager) retryBlocked(ctx context.Context) {
 	m.mu.Unlock()
 
 	if _, err := m.resolveDest(ctx); err != nil {
+		m.log.Debug("engine: destination still absent, jobs stay blocked",
+			"blocked", len(queued), "err", err)
 		return // still absent
 	}
 	m.log.Info("engine: destination appeared, resuming blocked jobs", "count", len(queued))
@@ -407,7 +444,10 @@ func (m *Manager) DestMounted(ctx context.Context) bool {
 func (m *Manager) resolveDest(ctx context.Context) (string, error) {
 	guid := m.db.Settings.GetString(ctx, store.SetDestVolumeGUID, "")
 	if guid == "" {
+		m.log.Debug("engine: no destination configured (dest_volume_guid empty)")
 		return "", errDestMissing
 	}
-	return m.p.Dest.ResolveDest(ctx, guid)
+	root, err := m.p.Dest.ResolveDest(ctx, guid)
+	m.log.Debug("engine: resolving destination", "guid", guid, "root", root, "err", err)
+	return root, err
 }

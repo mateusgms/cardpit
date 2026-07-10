@@ -67,6 +67,8 @@ func (r *jobRunner) run(ctx context.Context) error {
 	if err := r.m.db.Jobs.SetTotals(dctx, r.jobID, r.filesTotal, r.bytesTotal, r.filesSkipped); err != nil {
 		r.m.log.Error("engine: persisting totals", "job", r.jobID, "err", err)
 	}
+	r.m.log.Debug("engine: scan and dedup plan done", "job", r.jobID,
+		"scanned", len(entries), "to_copy", r.filesTotal, "skipped_dedup", r.filesSkipped)
 
 	// 3. Destination must be mounted (never copy to a fallback).
 	destRoot, err := r.m.resolveDest(ctx)

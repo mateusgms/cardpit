@@ -21,6 +21,7 @@ type statusResponse struct {
 	ActiveJobs    []store.Job         `json:"active_jobs"`
 	DestMounted   bool                `json:"dest_mounted"`
 	DestGUID      string              `json:"dest_guid"`
+	BlockedJobIDs []int64             `json:"blocked_job_ids"`
 	WatcherPaused bool                `json:"watcher_paused"`
 	Calibrating   *pendingCalibration `json:"calibrating,omitempty"`
 	UIPlaceholder bool                `json:"ui_placeholder"`
@@ -63,6 +64,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		ActiveJobs:    active,
 		DestMounted:   s.manager.DestMounted(ctx),
 		DestGUID:      guid,
+		BlockedJobIDs: s.manager.BlockedJobIDs(),
 		WatcherPaused: s.watcher.Paused(),
 		Calibrating:   s.calibration.Load(),
 		UIPlaceholder: webui.IsPlaceholder(),
@@ -126,6 +128,46 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelando"})
+}
+
+// --- destination candidates ---------------------------------------------------
+
+type destCandidateDTO struct {
+	VolumeGUID  string `json:"volume_guid"`
+	DriveLetter string `json:"drive_letter"`
+	Label       string `json:"label"`
+	Filesystem  string `json:"filesystem"`
+	TotalBytes  uint64 `json:"total_bytes"`
+	FreeBytes   uint64 `json:"free_bytes"`
+	System      bool   `json:"system"`
+}
+
+// handleDestCandidates lists the volumes offered as copy destination so the
+// UI can render a picker instead of asking for a raw volume GUID.
+func (s *Server) handleDestCandidates(w http.ResponseWriter, r *http.Request) {
+	out := []destCandidateDTO{}
+	if s.DestCandidates != nil {
+		// Win32 volume calls can stall on a sleeping drive; bound the wait.
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		cands, err := s.DestCandidates.ListDestCandidates(ctx)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		for _, c := range cands {
+			out = append(out, destCandidateDTO{
+				VolumeGUID:  c.GUIDPath,
+				DriveLetter: c.DriveLetter,
+				Label:       c.Label,
+				Filesystem:  c.Filesystem,
+				TotalBytes:  c.TotalBytes,
+				FreeBytes:   c.FreeBytes,
+				System:      c.System,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"candidates": out})
 }
 
 // --- settings ---------------------------------------------------------------
@@ -228,6 +270,11 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if k == store.SetWatcherPaused {
 			s.watcher.SetPaused(v == "true")
+		}
+		if k == store.SetDestVolumeGUID {
+			// Jobs parked waiting for the destination resume right away
+			// instead of on the next 30s tick.
+			s.manager.KickDestRetry()
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok",

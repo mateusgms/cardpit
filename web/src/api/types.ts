@@ -20,6 +20,7 @@ export interface Diagnostics {
   interactive: boolean
   can_shutdown: boolean
   log_level: string
+  log_path: string
 }
 
 export interface Card {
@@ -87,12 +88,23 @@ export interface WatcherVolume {
   lun: number
 }
 
+export interface DestCandidate {
+  volume_guid: string
+  drive_letter: string
+  label: string
+  filesystem: string
+  total_bytes: number
+  free_bytes: number
+  system: boolean
+}
+
 export interface Status {
   slots: Slot[] | null
   volumes: WatcherVolume[] | null
   active_jobs: Job[] | null
   dest_mounted: boolean
   dest_guid: string
+  blocked_job_ids: number[] | null
   watcher_paused: boolean
   calibrating?: { alias: string; armed_at: string; deadline: string }
   ui_placeholder: boolean

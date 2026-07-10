@@ -27,6 +27,19 @@ type VolumeInfo struct {
 	Root       string // directory files are read from: "E:\" or the fake card dir
 }
 
+// DestCandidate describes a volume that can be offered to the user as the
+// copy destination (a fixed drive on Windows; the configured dest dir on the
+// fake).
+type DestCandidate struct {
+	DriveLetter string // "D:" — empty on the fake
+	GUIDPath    string // "\\?\Volume{...}\" (or "fake-dest")
+	Label       string
+	Filesystem  string
+	TotalBytes  uint64
+	FreeBytes   uint64
+	System      bool // the OS system drive; shown to the user with a warning
+}
+
 // SlotKey is the stable identity of a physical reader slot: the USB location
 // path of the reader device plus the LUN (multi-slot readers expose several
 // volumes on one device, differing only by LUN).
@@ -74,12 +87,19 @@ type FreeSpacer interface {
 	FreeSpace(ctx context.Context, path string) (uint64, error)
 }
 
+type DestCandidateLister interface {
+	// ListDestCandidates returns the volumes that can be offered as the copy
+	// destination. Called on demand from the UI, never on a poll loop.
+	ListDestCandidates(ctx context.Context) ([]DestCandidate, error)
+}
+
 // Platform bundles the full set; app wiring picks the implementation.
 type Platform struct {
-	Volumes VolumeLister
-	Info    VolumeInfoReader
-	Slots   SlotResolver
-	Eject   Ejector
-	Dest    DestResolver
-	Space   FreeSpacer
+	Volumes  VolumeLister
+	Info     VolumeInfoReader
+	Slots    SlotResolver
+	Eject    Ejector
+	Dest     DestResolver
+	Space    FreeSpacer
+	DestList DestCandidateLister
 }
