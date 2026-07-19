@@ -41,6 +41,14 @@ export interface Slot {
   created_at: string
 }
 
+export interface SlotNameEntry {
+  id: number
+  alias: string
+  location_path: string
+  lun: number
+  assigned_at: string
+}
+
 export interface Job {
   id: number
   card_id?: number

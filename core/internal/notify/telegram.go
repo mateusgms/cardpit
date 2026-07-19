@@ -119,6 +119,16 @@ func (t *tgNotifier) DestMissing(ctx context.Context, in buspkg.DestMissing) err
 	return firstErr
 }
 
+func (t *tgNotifier) SlotAutoNamed(ctx context.Context, in buspkg.SlotAutoNamed) error {
+	var firstErr error
+	for _, chat := range t.chats {
+		if _, err := t.client.SendMessage(ctx, chat, msgSlotAutoNamed(in), nil); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 func (t *tgNotifier) Test(ctx context.Context) error {
 	var firstErr error
 	for _, chat := range t.chats {

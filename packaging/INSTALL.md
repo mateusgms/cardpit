@@ -15,13 +15,17 @@ Nenhum. Apenas o arquivo `cardpit.exe` (Windows x64).
    - O Windows pedirá confirmação de UAC ("Deseja permitir…") — clique em **Sim**
    - O terminal exibirá o **token de acesso** — anote-o
 4. Abra **http://localhost:8532** no navegador e cole o token
-5. Configure na interface:
-   - **Volume GUID do SSD** de destino (`Get-Volume | Select FriendlyName,Path` no PowerShell)
+5. Confira na interface (tudo já vem configurado para o modo kiosk):
+   - **SSD de destino** — a unidade **D:** é selecionada automaticamente
+     quando montada; use o seletor só para escolher outro disco
    - **Bot do Telegram** — o token e o **chat_id** já vêm embutidos nas
      versões oficiais ("já configurado" na tela); basta testar com
      "Enviar mensagem de teste". Os campos servem só para trocar de bot
      ou de chat.
-   - **Slots** na aba Slots (insira um cartão em cada leitor para calibrar)
+   - **Slots** — cada leitor ganha um nome fixo automaticamente na primeira
+     vez que um cartão é inserido (avisado no Telegram); etiquete o leitor
+     físico com o nome atribuído. A aba Slots guarda o histórico.
+   - **Cartões** — qualquer cartão plugado é copiado por padrão, sem perguntas
 
 O serviço inicia automaticamente com o Windows e reinicia sozinho em caso de falha.
 

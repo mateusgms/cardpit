@@ -38,7 +38,8 @@ sempre embute a UI real.
 2. Console admin: `cardpit.exe install` → `cardpit.exe start`.
 3. O **primeiro boot imprime o token de acesso** no log — guarde-o.
 4. Abra `http://localhost:8532`, cole o token e configure:
-   - o volume GUID do SSD de destino (`Get-Volume` no PowerShell);
+   - o volume GUID do SSD de destino (`Get-Volume` no PowerShell) — se a
+     unidade **D:** estiver montada, ela é selecionada automaticamente;
    - o bot do Telegram (token + chat_id) — use "Enviar mensagem de teste".
      Nas releases oficiais o token e o chat_id já vêm **embutidos no exe**
      (a pipeline carimba as secrets `TELEGRAM_KEY` e `TELEGRAM_CHAT_ID` do
@@ -46,7 +47,9 @@ sempre embute a UI real.
      TELEGRAM_CHAT_ID=...`); as variáveis de ambiente `TELEGRAM_KEY` e
      `TELEGRAM_CHAT_ID` no boot têm precedência sobre os valores embutidos,
      e valores salvos pela UI têm precedência permanente sobre ambos;
-   - calibre os slots na aba **Slots** (insira um cartão em cada leitor).
+   - slots ganham nomes fixos automaticamente na primeira inserção (aba
+     **Slots** mostra o histórico — etiquete cada leitor físico com o nome
+     atribuído); cartões desconhecidos são copiados por padrão (modo kiosk).
 5. Opcional: `cardpit.exe tray` na inicialização do usuário para o ícone
    de bandeja (o serviço roda em Session 0 e não pode ter tray próprio).
 

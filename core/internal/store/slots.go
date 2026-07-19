@@ -88,3 +88,62 @@ func (r *SlotRepo) Delete(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+// SlotNameEntry is one automatic slot name assignment. The log is append-only
+// so assigned names are never reused, keeping physical labels on the readers
+// valid even after a slot is deleted or a reader is replaced.
+type SlotNameEntry struct {
+	ID           int64  `json:"id"`
+	Alias        string `json:"alias"`
+	LocationPath string `json:"location_path"`
+	LUN          int    `json:"lun"`
+	AssignedAt   string `json:"assigned_at"`
+}
+
+type SlotNameLogRepo struct{ db *sql.DB }
+
+func (r *SlotNameLogRepo) Append(ctx context.Context, alias, locationPath string, lun int) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO slot_name_log (alias, location_path, lun, assigned_at) VALUES (?, ?, ?, ?)`,
+		alias, locationPath, lun, now())
+	return err
+}
+
+func (r *SlotNameLogRepo) List(ctx context.Context) ([]SlotNameEntry, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, alias, location_path, lun, assigned_at FROM slot_name_log ORDER BY id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SlotNameEntry
+	for rows.Next() {
+		var e SlotNameEntry
+		if err := rows.Scan(&e.ID, &e.Alias, &e.LocationPath, &e.LUN, &e.AssignedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// UsedAliases returns every alias ever assigned automatically, plus the count
+// of log entries (the basis for the "Leitor N" fallback numbering).
+func (r *SlotNameLogRepo) UsedAliases(ctx context.Context) (map[string]bool, int, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT alias FROM slot_name_log`)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	used := map[string]bool{}
+	n := 0
+	for rows.Next() {
+		var a string
+		if err := rows.Scan(&a); err != nil {
+			return nil, 0, err
+		}
+		used[a] = true
+		n++
+	}
+	return used, n, rows.Err()
+}

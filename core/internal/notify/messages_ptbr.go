@@ -151,6 +151,12 @@ func msgDestMissing(in bus.DestMissing) string {
 		in.CardAlias, in.SlotAlias)
 }
 
+func msgSlotAutoNamed(in bus.SlotAutoNamed) string {
+	return fmt.Sprintf("🏷️ Leitor novo identificado: %s\n"+
+		"Etiquete o leitor físico com este nome — ele é fixo e não muda mais.",
+		in.Alias)
+}
+
 func msgTest() string {
 	return fmt.Sprintf("✅ cardpit conectado! (%s)", time.Now().Local().Format("02/01/2006 15:04:05"))
 }

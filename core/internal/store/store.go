@@ -21,11 +21,12 @@ var migrationsFS embed.FS
 type DB struct {
 	sql *sql.DB
 
-	Cards    *CardRepo
-	Slots    *SlotRepo
-	Jobs     *JobRepo
-	Files    *FileRepo
-	Settings *SettingsRepo
+	Cards     *CardRepo
+	Slots     *SlotRepo
+	SlotNames *SlotNameLogRepo
+	Jobs      *JobRepo
+	Files     *FileRepo
+	Settings  *SettingsRepo
 }
 
 // Open opens (creating if needed) the database at path, applies PRAGMAs and
@@ -48,6 +49,7 @@ func Open(path string) (*DB, error) {
 	db := &DB{sql: sqlDB}
 	db.Cards = &CardRepo{db: sqlDB}
 	db.Slots = &SlotRepo{db: sqlDB}
+	db.SlotNames = &SlotNameLogRepo{db: sqlDB}
 	db.Jobs = &JobRepo{db: sqlDB}
 	db.Files = &FileRepo{db: sqlDB}
 	db.Settings = &SettingsRepo{db: sqlDB}

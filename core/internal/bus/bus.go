@@ -26,6 +26,7 @@ const (
 	TopicCardDecision   Topic = "card.decision"
 	TopicDestMissing    Topic = "dest.missing"
 	TopicSlotCalibrated Topic = "slot.calibrated"
+	TopicSlotAutoNamed  Topic = "slot.autonamed"
 )
 
 type Event struct {

@@ -176,6 +176,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
 	mux.HandleFunc("POST /api/cards/decision", s.handleCardDecision)
 	mux.HandleFunc("GET /api/slots", s.handleListSlots)
+	mux.HandleFunc("GET /api/slots/history", s.handleSlotNameHistory)
 	mux.HandleFunc("PUT /api/slots/{id}", s.handleUpdateSlot)
 	mux.HandleFunc("DELETE /api/slots/{id}", s.handleDeleteSlot)
 	mux.HandleFunc("POST /api/slots/calibrate", s.handleCalibrate)

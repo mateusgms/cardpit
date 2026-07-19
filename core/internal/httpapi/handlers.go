@@ -200,7 +200,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		store.SetMaxConcurrent:     "4",
 		store.SetVerifyMode:        "fast",
 		store.SetEjectAfterCopy:    "true",
-		store.SetUnknownCardPolicy: "ask",
+		store.SetUnknownCardPolicy: "copy",
 		store.SetRequireDCIM:       "false",
 		store.SetWatcherPaused:     "false",
 		store.SetAutoUpdate:        "true",
@@ -408,6 +408,17 @@ func (s *Server) handleListSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"slots": slots})
+}
+
+// handleSlotNameHistory returns the append-only log of automatic slot name
+// assignments, so the operator can check which physical label a reader got.
+func (s *Server) handleSlotNameHistory(w http.ResponseWriter, r *http.Request) {
+	entries, err := s.db.SlotNames.List(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"history": entries})
 }
 
 func (s *Server) handleUpdateSlot(w http.ResponseWriter, r *http.Request) {

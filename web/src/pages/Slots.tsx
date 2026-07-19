@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useEvents } from '../hooks/useEvents'
-import type { Slot, Status } from '../api/types'
+import type { Slot, SlotNameEntry, Status } from '../api/types'
 
 export default function Slots() {
   const [slots, setSlots] = useState<Slot[]>([])
+  const [history, setHistory] = useState<SlotNameEntry[]>([])
   const [wizAlias, setWizAlias] = useState('')
   const [waiting, setWaiting] = useState(false)
   const [doneMsg, setDoneMsg] = useState('')
@@ -12,6 +13,8 @@ export default function Slots() {
   const load = async () => {
     const r = await api<{ slots: Slot[] | null }>('/api/slots')
     setSlots(r.slots ?? [])
+    const h = await api<{ history: SlotNameEntry[] | null }>('/api/slots/history')
+    setHistory(h.history ?? [])
     const st = await api<Status>('/api/status')
     setWaiting(Boolean(st.calibrating))
   }
@@ -28,6 +31,12 @@ export default function Slots() {
       setWizAlias('')
       load()
       setTimeout(() => setDoneMsg(''), 6000)
+    }
+    if (topic === 'slot.autonamed') {
+      const d = data as { alias: string }
+      setDoneMsg(`Leitor novo identificado como "${d.alias}" — etiquete o leitor físico 🏷️`)
+      load()
+      setTimeout(() => setDoneMsg(''), 10000)
     }
   })
 
@@ -60,9 +69,10 @@ export default function Slots() {
     <>
       <h1>Slots</h1>
       <p className="muted">
-        Um slot é identificado pela porta USB física (location path + LUN). Calibre
-        cada slot uma vez para que as notificações digam exatamente qual cartão
-        remover. Recalibre se o leitor/hub mudar de porta.
+        Um slot é identificado pela porta USB física (location path + LUN). Slots
+        novos ganham um nome fixo automaticamente na primeira vez que um cartão é
+        inserido — etiquete o leitor físico com o nome atribuído. O assistente
+        abaixo serve para renomear manualmente, se quiser.
       </p>
 
       <h2>Assistente de calibração</h2>
@@ -91,7 +101,7 @@ export default function Slots() {
         {doneMsg && <div className="banner info" style={{ marginTop: 10 }}>{doneMsg}</div>}
       </div>
 
-      <h2>Slots calibrados</h2>
+      <h2>Slots identificados</h2>
       <div className="card">
         <table className="responsive">
           <thead>
@@ -109,7 +119,43 @@ export default function Slots() {
             {slots.length === 0 && (
               <tr>
                 <td colSpan={4} className="muted">
-                  Nenhum slot calibrado.
+                  Nenhum slot identificado ainda — insira um cartão em cada leitor.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Histórico de identificações</h2>
+      <p className="muted">
+        Registro permanente dos nomes atribuídos automaticamente. Um nome nunca é
+        reutilizado, então a etiqueta física de cada leitor continua válida mesmo
+        se o slot for removido da lista acima.
+      </p>
+      <div className="card">
+        <table className="responsive">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Location path</th>
+              <th>LUN</th>
+              <th>Atribuído em</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map((h) => (
+              <tr key={h.id}>
+                <td>{h.alias}</td>
+                <td className="mono">{h.location_path}</td>
+                <td>{h.lun}</td>
+                <td>{new Date(h.assigned_at).toLocaleString()}</td>
+              </tr>
+            ))}
+            {history.length === 0 && (
+              <tr>
+                <td colSpan={4} className="muted">
+                  Nenhuma identificação automática ainda.
                 </td>
               </tr>
             )}

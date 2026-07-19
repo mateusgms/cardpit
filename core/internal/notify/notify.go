@@ -29,6 +29,7 @@ type Notifier interface {
 	JobFailed(ctx context.Context, msgRef int64, in FailInfo) error
 	AskUnknownCard(ctx context.Context, in bus.CardUnknown) error
 	DestMissing(ctx context.Context, in bus.DestMissing) error
+	SlotAutoNamed(ctx context.Context, in bus.SlotAutoNamed) error
 	Test(ctx context.Context) error
 }
 
@@ -127,7 +128,8 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 
 	sub := d.bus.Subscribe(256,
 		bus.TopicJobStarted, bus.TopicJobProgress, bus.TopicJobCompleted,
-		bus.TopicJobFailed, bus.TopicCardUnknown, bus.TopicDestMissing)
+		bus.TopicJobFailed, bus.TopicCardUnknown, bus.TopicDestMissing,
+		bus.TopicSlotAutoNamed)
 	defer sub.Close()
 
 	d.superviseTelegram(ctx) // initial build
@@ -214,6 +216,13 @@ func (d *Dispatcher) handle(ctx context.Context, e bus.Event) {
 		d.q.enqueue(task{desc: "dest missing alert", retries: 4, backoff: 5 * time.Second,
 			run: func(tctx context.Context) error {
 				return n.DestMissing(tctx, ev)
+			}})
+
+	case bus.TopicSlotAutoNamed:
+		ev := e.Payload.(bus.SlotAutoNamed)
+		d.q.enqueue(task{desc: "slot auto-named", retries: 8, backoff: 5 * time.Second,
+			run: func(tctx context.Context) error {
+				return n.SlotAutoNamed(tctx, ev)
 			}})
 	}
 }

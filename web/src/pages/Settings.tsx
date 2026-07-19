@@ -33,7 +33,7 @@ export default function SettingsPage() {
         max_concurrent_jobs: s.max_concurrent_jobs ?? '4',
         verify_mode: s.verify_mode ?? 'fast',
         eject_after_copy: s.eject_after_copy ?? 'true',
-        unknown_card_policy: s.unknown_card_policy ?? 'ask',
+        unknown_card_policy: s.unknown_card_policy ?? 'copy',
         require_dcim: s.require_dcim ?? 'false',
         telegram_chat_ids: s.telegram_chat_ids ?? '',
         auto_update: s.auto_update ?? 'true',
@@ -109,7 +109,7 @@ export default function SettingsPage() {
         <label className="field">
           <span>Cartão desconhecido</span>
           <select
-            value={s.unknown_card_policy ?? 'ask'}
+            value={s.unknown_card_policy ?? 'copy'}
             onChange={(e) => set('unknown_card_policy', e.target.value)}
           >
             <option value="ask">perguntar (Telegram/painel)</option>
