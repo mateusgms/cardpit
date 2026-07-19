@@ -7,6 +7,7 @@ export default function SettingsPage() {
   const [s, setS] = useState<Settings>({})
   const [hasTgToken, setHasTgToken] = useState(false)
   const [tgToken, setTgToken] = useState('')
+  const [initialChatIds, setInitialChatIds] = useState('')
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [saving, setSaving] = useState(false)
@@ -15,6 +16,7 @@ export default function SettingsPage() {
     api<{ settings: Settings; has_telegram_token: boolean }>('/api/settings').then((r) => {
       setS(r.settings)
       setHasTgToken(r.has_telegram_token)
+      setInitialChatIds(r.settings.telegram_chat_ids ?? '')
     })
   }, [])
 
@@ -41,6 +43,11 @@ export default function SettingsPage() {
       if (tgToken.trim()) {
         setHasTgToken(true)
         setTgToken('')
+      }
+      if ((s.telegram_chat_ids ?? '') !== initialChatIds) {
+        // Mirror the backend: an actually-changed value is now UI-owned.
+        set('telegram_chat_ids_source', 'ui')
+        setInitialChatIds(s.telegram_chat_ids ?? '')
       }
       setMsg('Configurações salvas. (Alterar o limite de jobs simultâneos requer reiniciar o serviço.)')
     } catch (e) {
@@ -161,7 +168,12 @@ export default function SettingsPage() {
           />
         </label>
         <label className="field">
-          <span>Chat IDs autorizados (separados por vírgula)</span>
+          <span>
+            Chat IDs autorizados (separados por vírgula){' '}
+            {s.telegram_chat_ids_source === 'env' && (
+              <em>(pré-configurado — edite só para trocar)</em>
+            )}
+          </span>
           <input
             value={s.telegram_chat_ids ?? ''}
             onChange={(e) => set('telegram_chat_ids', e.target.value)}
