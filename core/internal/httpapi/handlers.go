@@ -257,6 +257,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			}
 			v = sealed
 		}
+		chatIDsChanged := k == store.SetTelegramChatIDs &&
+			v != s.db.Settings.GetString(ctx, store.SetTelegramChatIDs, "")
 		if err := s.db.Settings.Set(ctx, k, v); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -264,6 +266,15 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if k == store.SetTelegramToken {
 			// A UI-entered token wins over TELEGRAM_KEY on future boots.
 			if err := s.db.Settings.Set(ctx, store.SetTelegramTokenSrc, store.TokenSourceUI); err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		if chatIDsChanged {
+			// UI-entered chat IDs win over TELEGRAM_CHAT_ID on future boots.
+			// The UI resends this field on every save, so an unchanged echo
+			// must not claim ownership and block future env re-seeds.
+			if err := s.db.Settings.Set(ctx, store.SetTelegramChatIDsSrc, store.TokenSourceUI); err != nil {
 				writeErr(w, http.StatusInternalServerError, err.Error())
 				return
 			}

@@ -15,11 +15,22 @@ import (
 // environment; locally it is a plain process/service env var.
 const EnvTelegramKey = "TELEGRAM_KEY"
 
+// EnvTelegramChatID is the environment variable that pre-configures the
+// Telegram chat ID allowlist (comma-separated), mirroring EnvTelegramKey: in
+// CI it comes from the TELEGRAM_CHAT_ID secret of the GitHub environment;
+// locally it is a plain process/service env var.
+const EnvTelegramChatID = "TELEGRAM_CHAT_ID"
+
 // buildTelegramKey is stamped into release binaries by the pipeline via
 // -ldflags "-X .../notify.buildTelegramKey=<token>" (see the Makefile), so a
 // distributed exe comes with Telegram pre-configured. The TELEGRAM_KEY env
 // var, when set, takes precedence over the stamped value.
 var buildTelegramKey string
+
+// buildTelegramChatID is the chat-ID counterpart of buildTelegramKey, stamped
+// via -ldflags "-X .../notify.buildTelegramChatID=<id>". The TELEGRAM_CHAT_ID
+// env var, when set, takes precedence over the stamped value.
+var buildTelegramChatID string
 
 // SeedTelegramTokenFromEnv seals the pre-configured token (TELEGRAM_KEY env
 // var, falling back to the build-time stamp) into the settings on boot so a
@@ -67,4 +78,48 @@ func seedTelegramToken(ctx context.Context, db *store.DB, secrets secret.SecretB
 	}
 	log.Info("notify: telegram token pré-configurado aplicado (env " +
 		EnvTelegramKey + " ou build)")
+}
+
+// SeedTelegramChatIDsFromEnv writes the pre-configured chat ID allowlist
+// (TELEGRAM_CHAT_ID env var, falling back to the build-time stamp) into the
+// settings on boot, with the same precedence rules as the token seed: chat
+// IDs entered through the UI always win.
+func SeedTelegramChatIDsFromEnv(ctx context.Context, db *store.DB, log *slog.Logger) {
+	chatIDs := strings.TrimSpace(os.Getenv(EnvTelegramChatID))
+	if chatIDs == "" {
+		chatIDs = strings.TrimSpace(buildTelegramChatID)
+	}
+	seedTelegramChatIDs(ctx, db, log, chatIDs)
+}
+
+func seedTelegramChatIDs(ctx context.Context, db *store.DB, log *slog.Logger, chatIDs string) {
+	if chatIDs == "" {
+		return
+	}
+	if len(parseChatIDs(chatIDs)) == 0 {
+		log.Error("notify: chat IDs pré-configurados inválidos; ignorando", "value", chatIDs)
+		return
+	}
+	existing, hasChatIDs, err := db.Settings.Get(ctx, store.SetTelegramChatIDs)
+	if err != nil {
+		log.Error("notify: reading telegram chat ids for env seed", "err", err)
+		return
+	}
+	source := db.Settings.GetString(ctx, store.SetTelegramChatIDsSrc, "")
+	if source == store.TokenSourceUI || (hasChatIDs && existing != "" && source == "") {
+		return // manually configured — never overwrite
+	}
+	if source == store.TokenSourceEnv && existing == chatIDs {
+		return // unchanged since the last seed
+	}
+	if err := db.Settings.Set(ctx, store.SetTelegramChatIDs, chatIDs); err != nil {
+		log.Error("notify: storing telegram chat ids from env", "err", err)
+		return
+	}
+	if err := db.Settings.Set(ctx, store.SetTelegramChatIDsSrc, store.TokenSourceEnv); err != nil {
+		log.Error("notify: storing telegram chat ids source", "err", err)
+		return
+	}
+	log.Info("notify: telegram chat IDs pré-configurados aplicados (env " +
+		EnvTelegramChatID + " ou build)")
 }
