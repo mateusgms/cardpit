@@ -7,6 +7,7 @@ export default function SettingsPage() {
   const [s, setS] = useState<Settings>({})
   const [hasTgToken, setHasTgToken] = useState(false)
   const [tgToken, setTgToken] = useState('')
+  const [initialChatIds, setInitialChatIds] = useState('')
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [saving, setSaving] = useState(false)
@@ -15,6 +16,7 @@ export default function SettingsPage() {
     api<{ settings: Settings; has_telegram_token: boolean }>('/api/settings').then((r) => {
       setS(r.settings)
       setHasTgToken(r.has_telegram_token)
+      setInitialChatIds(r.settings.telegram_chat_ids ?? '')
     })
   }, [])
 
@@ -31,7 +33,7 @@ export default function SettingsPage() {
         max_concurrent_jobs: s.max_concurrent_jobs ?? '4',
         verify_mode: s.verify_mode ?? 'fast',
         eject_after_copy: s.eject_after_copy ?? 'true',
-        unknown_card_policy: s.unknown_card_policy ?? 'ask',
+        unknown_card_policy: s.unknown_card_policy ?? 'copy',
         require_dcim: s.require_dcim ?? 'false',
         telegram_chat_ids: s.telegram_chat_ids ?? '',
         auto_update: s.auto_update ?? 'true',
@@ -41,6 +43,11 @@ export default function SettingsPage() {
       if (tgToken.trim()) {
         setHasTgToken(true)
         setTgToken('')
+      }
+      if ((s.telegram_chat_ids ?? '') !== initialChatIds) {
+        // Mirror the backend: an actually-changed value is now UI-owned.
+        set('telegram_chat_ids_source', 'ui')
+        setInitialChatIds(s.telegram_chat_ids ?? '')
       }
       setMsg('Configurações salvas. (Alterar o limite de jobs simultâneos requer reiniciar o serviço.)')
     } catch (e) {
@@ -102,7 +109,7 @@ export default function SettingsPage() {
         <label className="field">
           <span>Cartão desconhecido</span>
           <select
-            value={s.unknown_card_policy ?? 'ask'}
+            value={s.unknown_card_policy ?? 'copy'}
             onChange={(e) => set('unknown_card_policy', e.target.value)}
           >
             <option value="ask">perguntar (Telegram/painel)</option>
@@ -161,7 +168,12 @@ export default function SettingsPage() {
           />
         </label>
         <label className="field">
-          <span>Chat IDs autorizados (separados por vírgula)</span>
+          <span>
+            Chat IDs autorizados (separados por vírgula){' '}
+            {s.telegram_chat_ids_source === 'env' && (
+              <em>(pré-configurado — edite só para trocar)</em>
+            )}
+          </span>
           <input
             value={s.telegram_chat_ids ?? ''}
             onChange={(e) => set('telegram_chat_ids', e.target.value)}

@@ -23,6 +23,11 @@ import (
 // so a fixed destination drive appearing is only noticed here.
 const destRetryInterval = 30 * time.Second
 
+// defaultDestDrive is auto-selected as the destination while dest_volume_guid
+// is empty (kiosk mode: the machine has no keyboard to pick one in the UI).
+// A destination chosen in the UI is never overwritten.
+const defaultDestDrive = "D:"
+
 type Manager struct {
 	db     *store.DB
 	p      platform.Platform
@@ -113,6 +118,7 @@ func (m *Manager) Run(ctx context.Context) error {
 	destTicker := time.NewTicker(destRetryInterval)
 	defer destTicker.Stop()
 
+	m.seedDefaultDest(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -127,6 +133,7 @@ func (m *Manager) Run(ctx context.Context) error {
 				m.handleDecision(ctx, p)
 			}
 		case <-destTicker.C:
+			m.seedDefaultDest(ctx)
 			m.retryBlocked(ctx)
 		case <-m.kick:
 			m.retryBlocked(ctx)
@@ -159,7 +166,7 @@ func (m *Manager) handleAttach(ctx context.Context, va bus.VolumeAttached) {
 	case known:
 		m.createAndAdmit(ctx, va, card.ID, slotID, card.Alias, slotAlias)
 	default:
-		policy := m.db.Settings.GetString(ctx, store.SetUnknownCardPolicy, "ask")
+		policy := m.db.Settings.GetString(ctx, store.SetUnknownCardPolicy, "copy")
 		switch policy {
 		case "ignore":
 			m.log.Info("engine: unknown card ignored by policy", "serial", va.Serial)
@@ -197,13 +204,17 @@ func (m *Manager) isTracked(guid string) bool {
 	return false
 }
 
-// slotAlias resolves the human name for the physical slot; uncalibrated
-// slots fall back to the raw location path (RF-02.4).
+// slotAlias resolves the human name for the physical slot. A never-seen
+// slot is auto-named from the fixed pool (kiosk mode: no manual calibration
+// needed); if that fails, it falls back to the raw location path (RF-02.4).
 func (m *Manager) slotAlias(ctx context.Context, va bus.VolumeAttached) (string, int64) {
 	if va.SlotLocationPath == "" {
 		return "slot desconhecido", 0
 	}
 	slot, found, err := m.db.Slots.FindByKey(ctx, va.SlotLocationPath, va.SlotLUN)
+	if err == nil && !found {
+		slot, found = m.autoNameSlot(ctx, va.SlotLocationPath, va.SlotLUN)
+	}
 	if err != nil || !found {
 		return fmt.Sprintf("%s (LUN %d)", va.SlotLocationPath, va.SlotLUN), 0
 	}
@@ -450,4 +461,31 @@ func (m *Manager) resolveDest(ctx context.Context) (string, error) {
 	root, err := m.p.Dest.ResolveDest(ctx, guid)
 	m.log.Debug("engine: resolving destination", "guid", guid, "root", root, "err", err)
 	return root, err
+}
+
+// seedDefaultDest fills dest_volume_guid with the defaultDestDrive volume
+// while the setting is empty. It runs at start and on every dest tick, so
+// the drive is picked up whenever it appears — the box runs 24/7 and the
+// SSD may be plugged long after boot. A UI choice is never overwritten.
+func (m *Manager) seedDefaultDest(ctx context.Context) {
+	if m.db.Settings.GetString(ctx, store.SetDestVolumeGUID, "") != "" {
+		return
+	}
+	cands, err := m.p.DestList.ListDestCandidates(ctx)
+	if err != nil {
+		m.log.Debug("engine: listing dest candidates for default seed", "err", err)
+		return
+	}
+	for _, c := range cands {
+		if !strings.EqualFold(c.DriveLetter, defaultDestDrive) || c.System || c.GUIDPath == "" {
+			continue
+		}
+		if err := m.db.Settings.Set(ctx, store.SetDestVolumeGUID, c.GUIDPath); err != nil {
+			m.log.Error("engine: seeding default destination", "err", err)
+			return
+		}
+		m.log.Info("engine: destino padrão selecionado automaticamente",
+			"drive", c.DriveLetter, "guid", c.GUIDPath, "label", c.Label)
+		return
+	}
 }

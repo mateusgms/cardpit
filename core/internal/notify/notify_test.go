@@ -62,8 +62,9 @@ func (f *fakeNotifier) AskUnknownCard(_ context.Context, in bus.CardUnknown) err
 	f.asked = append(f.asked, in)
 	return nil
 }
-func (f *fakeNotifier) DestMissing(context.Context, bus.DestMissing) error { return nil }
-func (f *fakeNotifier) Test(context.Context) error                         { return nil }
+func (f *fakeNotifier) DestMissing(context.Context, bus.DestMissing) error     { return nil }
+func (f *fakeNotifier) SlotAutoNamed(context.Context, bus.SlotAutoNamed) error { return nil }
+func (f *fakeNotifier) Test(context.Context) error                             { return nil }
 
 func (f *fakeNotifier) counts() (int, int, int, int, int) {
 	f.mu.Lock()

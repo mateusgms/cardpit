@@ -81,7 +81,7 @@ Usuário único, técnico, operando um PC Windows dedicado ou semi-dedicado. Flu
 | RF-01.2 | Após detecção, aplicar debounce configurável (padrão: 3 s) antes de iniciar leitura, evitando corrida com a montagem do SO. | P0 |
 | RF-01.3 | Identificar o cartão por volume serial number (`GetVolumeInformation`) + label. | P0 |
 | RF-01.4 | Classificar o cartão contra a whitelist cadastrada: `conhecido`, `desconhecido`. | P0 |
-| RF-01.5 | Para cartão desconhecido, aplicar a política configurada: `ignorar` \| `copiar` \| `perguntar via Telegram` (botões inline "Copiar / Ignorar / Ignorar sempre"). Padrão: `perguntar`. | P1 |
+| RF-01.5 | Para cartão desconhecido, aplicar a política configurada: `ignorar` \| `copiar` \| `perguntar via Telegram` (botões inline "Copiar / Ignorar / Ignorar sempre"). Padrão: `copiar` (modo kiosk 24/7: tudo que plugar é copiado sem interação). | P1 |
 | RF-01.6 | Heurística opcional "só copiar se existir `\DCIM`" (toggle na UI, padrão: desligado). | P2 |
 | RF-01.7 | Detectar remoção de volume a qualquer momento e reagir conforme RF-03.8. | P0 |
 
@@ -92,7 +92,7 @@ Usuário único, técnico, operando um PC Windows dedicado ou semi-dedicado. Flu
 | RF-02.1 | Resolver a cadeia letra → volume GUID (`GetVolumeNameForVolumeMountPoint`) → disco físico (`IOCTL_STORAGE_GET_DEVICE_NUMBER`) → device instance ID → location path USB (`DEVPKEY_Device_LocationPaths` via CfgMgr32, subindo a árvore com `CM_Get_Parent`). | P0 |
 | RF-02.2 | A chave de identidade do slot é `location_path + LUN`, cobrindo leitores multi-slot que expõem vários volumes num único dispositivo USB. | P0 |
 | RF-02.3 | Wizard de calibração na UI: usuário insere um cartão em cada slot e atribui um apelido (ex.: "Leitor esquerdo", "Hub porta 1 — microSD"). Persistir apelido ↔ chave do slot. | P0 |
-| RF-02.4 | Slots não calibrados são reportados pelo location path bruto, com aviso na UI sugerindo calibração. | P1 |
+| RF-02.4 | Slots nunca vistos ganham automaticamente um nome fixo de uma lista pré-definida (registrado em log permanente, nome nunca reutilizado — o operador etiqueta o leitor físico com ele); se a auto-nomeação falhar, o fallback é o location path bruto. | P1 |
 | RF-02.5 | Botão "recalibrar slot" na UI para quando o hub/leitor mudar de porta física. | P1 |
 | RF-02.6 | Toda mensagem de Telegram e todo card de job na UI devem exibir o apelido do slot. | P0 |
 

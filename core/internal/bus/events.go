@@ -72,3 +72,12 @@ type SlotCalibrated struct {
 	LocationPath string `json:"location_path"`
 	LUN          int    `json:"lun"`
 }
+
+// SlotAutoNamed — TopicSlotAutoNamed: a never-seen reader slot was assigned
+// a fixed name automatically, so the operator can label it physically.
+type SlotAutoNamed struct {
+	SlotID       int64  `json:"slot_id"`
+	Alias        string `json:"alias"`
+	LocationPath string `json:"location_path"`
+	LUN          int    `json:"lun"`
+}

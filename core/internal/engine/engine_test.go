@@ -260,6 +260,8 @@ func TestUnknownCardAskFlow(t *testing.T) {
 	sub := e.b.Subscribe(64)
 	defer sub.Close()
 
+	// The ask flow is opt-in now that the product default is "copy".
+	e.db.Settings.Set(ctx, store.SetUnknownCardPolicy, "ask")
 	e.insertCard(t, "slot1", "NEWCARD", map[string]testFile{"IMG.JPG": {"data", time.Now()}})
 	att := e.attach(t, "slot1", "NEWCARD")
 	e.m.handleAttach(ctx, att)
@@ -288,6 +290,7 @@ func TestUnknownCardAlwaysIgnore(t *testing.T) {
 	sub := e.b.Subscribe(64)
 	defer sub.Close()
 
+	e.db.Settings.Set(ctx, store.SetUnknownCardPolicy, "ask")
 	e.insertCard(t, "slot1", "NEWCARD", map[string]testFile{"IMG.JPG": {"data", time.Now()}})
 	att := e.attach(t, "slot1", "NEWCARD")
 	e.m.handleAttach(ctx, att)
