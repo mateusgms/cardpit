@@ -148,6 +148,14 @@ func (m *Manager) handleAttach(ctx context.Context, va bus.VolumeAttached) {
 		m.log.Debug("engine: volume already tracked, ignoring", "volume", va.VolumeGUID)
 		return
 	}
+	// A removable portable SSD can appear through the same watcher as a
+	// card. Seed the kiosk default first, then never ingest the configured
+	// destination volume into itself.
+	m.seedDefaultDest(ctx)
+	if sameVolumeGUID(va.VolumeGUID, m.db.Settings.GetString(ctx, store.SetDestVolumeGUID, "")) {
+		m.log.Info("engine: destination volume ignored by source ingest", "volume", va.VolumeGUID)
+		return
+	}
 	if m.db.Settings.GetBool(ctx, store.SetRequireDCIM, false) && !hasDCIM(va.Root) {
 		m.log.Info("engine: card ignored (no DCIM)", "volume", va.VolumeGUID)
 		return
@@ -176,6 +184,36 @@ func (m *Manager) handleAttach(ctx context.Context, va bus.VolumeAttached) {
 			m.askUnknown(ctx, va, slotID, slotAlias)
 		}
 	}
+}
+
+func sameVolumeGUID(a, b string) bool {
+	normalize := func(s string) string {
+		return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(s), `\`))
+	}
+	return a != "" && b != "" && normalize(a) == normalize(b)
+}
+
+// DiscoverReaderSlots records USB reader interfaces visible without mounted
+// media. It is called synchronously during boot so the dashboard can show
+// empty connected readers before the watcher sees any cards.
+func (m *Manager) DiscoverReaderSlots(ctx context.Context) {
+	if m.p.Readers == nil {
+		return
+	}
+	readers, err := m.p.Readers.ListReaderSlots(ctx)
+	if err != nil {
+		m.log.Warn("engine: startup reader discovery failed", "err", err)
+		return
+	}
+	for _, reader := range readers {
+		if reader.Key.LocationPath == "" {
+			continue
+		}
+		if _, found, err := m.db.Slots.FindByKey(ctx, reader.Key.LocationPath, reader.Key.LUN); err == nil && !found {
+			m.autoNameSlot(ctx, reader.Key.LocationPath, reader.Key.LUN)
+		}
+	}
+	m.log.Info("engine: startup reader discovery complete", "readers", len(readers))
 }
 
 func cardDisplayName(va bus.VolumeAttached) string {

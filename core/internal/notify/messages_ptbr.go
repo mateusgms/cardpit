@@ -86,10 +86,30 @@ func msgProgress(in ProgressInfo) string {
 	fmt.Fprintf(&b, "%s %d%%\n", progressBar(pct), pct)
 	fmt.Fprintf(&b, "%d/%d arquivos · %s de %s",
 		ev.FilesCopied, ev.FilesTotal, fmtBytes(ev.BytesCopied), fmtBytes(ev.BytesTotal))
+	if ev.ETASeconds > 0 && ev.BytesPerSecond > 0 {
+		fmt.Fprintf(&b, "\n%s/s · tempo restante %s",
+			fmtBytes(ev.BytesPerSecond), formatRemaining(ev.ETASeconds))
+	} else {
+		b.WriteString("\nEstimativa: calculando…")
+	}
 	if ev.FilesFailed > 0 {
 		fmt.Fprintf(&b, "\n⚠ %d arquivos com falha até agora", ev.FilesFailed)
 	}
 	return b.String()
+}
+
+func formatRemaining(seconds int64) string {
+	if seconds < 0 {
+		seconds = 0
+	}
+	d := time.Duration(seconds) * time.Second
+	if d >= time.Hour {
+		return d.Round(time.Minute).String()
+	}
+	if d >= time.Minute {
+		return d.Round(time.Second).String()
+	}
+	return d.String()
 }
 
 func msgCompleted(in CompletedInfo) string {

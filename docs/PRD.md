@@ -101,7 +101,7 @@ Usuário único, técnico, operando um PC Windows dedicado ou semi-dedicado. Flu
 | ID | Requisito | Prioridade |
 |---|---|---|
 | RF-03.1 | Um job de cópia independente por volume detectado; jobs executam concorrentemente (limite configurável, padrão: 4). | P0 |
-| RF-03.2 | Destino organizado por template configurável, padrão `{destino}\{YYYY-MM-DD}\`, com a data derivada do **mtime de cada arquivo** (em câmeras, mtime = data de captura; dispensa parse de EXIF). | P0 |
+| RF-03.2 | Destino organizado por template configurável, padrão `{destino}\{YYYY-MM-DD}\{period}\`, com a data/período derivados do **mtime de cada arquivo**. `{period}` gera `Dia` (06–14h), `Tarde` (14–18h) ou `Noite` (18–06h). | P0 |
 | RF-03.3 | Escrever cada arquivo como `{nome}.cardpit-tmp` e renomear para o nome final **somente após** o hash conferir. Arquivos `.cardpit-tmp` órfãos são limpos no boot do serviço. | P0 |
 | RF-03.4 | Calcular xxHash64 em streaming durante a cópia (`io.TeeReader`) — custo zero de leitura extra. | P0 |
 | RF-03.5 | Modo "verificação paranóica" (toggle, padrão: desligado): reler o arquivo do destino e conferir o hash antes do rename. | P1 |

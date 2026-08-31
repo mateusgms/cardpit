@@ -29,7 +29,7 @@ export default function SettingsPage() {
     try {
       const body: Settings = {
         dest_volume_guid: s.dest_volume_guid ?? '',
-        dest_template: s.dest_template ?? '{YYYY-MM-DD}',
+        dest_template: s.dest_template ?? '{YYYY-MM-DD}/{period}',
         max_concurrent_jobs: s.max_concurrent_jobs ?? '4',
         verify_mode: s.verify_mode ?? 'fast',
         eject_after_copy: s.eject_after_copy ?? 'true',
@@ -96,7 +96,7 @@ export default function SettingsPage() {
           A cópia nunca usa outro destino se este não estiver montado.
         </p>
         <label className="field">
-          <span>Template de pastas (tokens: {'{YYYY-MM-DD} {YYYY} {MM} {DD} {card_alias}'})</span>
+          <span>Template de pastas (tokens: {'{YYYY-MM-DD} {YYYY} {MM} {DD} {period} {card_alias}'})</span>
           <input
             value={s.dest_template ?? ''}
             onChange={(e) => set('dest_template', e.target.value)}

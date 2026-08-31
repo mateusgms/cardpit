@@ -40,6 +40,8 @@ type jobRunner struct {
 
 	filesCopied, filesFailed, filesSkipped, filesTotal int
 	bytesCopied, bytesTotal                            int64
+	inflightBytes                                      int64
+	eta                                                etaEstimator
 
 	lastFlush  time.Time
 	sinceFlush int
@@ -92,6 +94,7 @@ func (r *jobRunner) run(ctx context.Context) error {
 
 	// 5. Copy.
 	r.m.db.Jobs.SetStatus(dctx, r.jobID, store.StatusCopying)
+	r.eta.start(time.Now(), 0)
 	r.publish(bus.TopicJobStarted, store.StatusCopying, "")
 
 	for _, entry := range toCopy {
@@ -99,7 +102,11 @@ func (r *jobRunner) run(ctx context.Context) error {
 			break
 		}
 		dstDir := filepath.Join(destRoot, expandTemplate(r.set.template, entry.mtime, r.cardAlias))
-		dstPath, hash, err := r.m.copier.copyOne(ctx, entry, dstDir, r.set.paranoid)
+		dstPath, hash, err := r.m.copier.copyOne(ctx, entry, dstDir, r.set.paranoid, func(n int64) {
+			r.inflightBytes = n
+			r.flushProgress(dctx, false)
+		})
+		r.inflightBytes = 0
 		if err != nil {
 			if ctx.Err() != nil {
 				break
@@ -223,18 +230,64 @@ func (r *jobRunner) flushProgress(dctx context.Context, force bool) {
 }
 
 func (r *jobRunner) publish(topic bus.Topic, status, errMsg string) {
+	liveBytes := r.bytesCopied + r.inflightBytes
+	bps, etaSeconds := int64(0), int64(0)
+	if topic == bus.TopicJobProgress {
+		bps, etaSeconds = r.eta.sample(time.Now(), liveBytes, r.bytesTotal)
+	}
 	r.m.bus.Publish(bus.Event{Topic: topic, Payload: bus.JobEvent{
-		JobID:        r.jobID,
-		VolumeGUID:   r.vol.VolumeGUID,
-		CardAlias:    r.cardAlias,
-		SlotAlias:    r.slotAlias,
-		Status:       status,
-		FilesTotal:   r.filesTotal,
-		FilesCopied:  r.filesCopied,
-		FilesSkipped: r.filesSkipped,
-		FilesFailed:  r.filesFailed,
-		BytesTotal:   r.bytesTotal,
-		BytesCopied:  r.bytesCopied,
-		Error:        errMsg,
+		JobID:          r.jobID,
+		VolumeGUID:     r.vol.VolumeGUID,
+		CardAlias:      r.cardAlias,
+		SlotAlias:      r.slotAlias,
+		Status:         status,
+		FilesTotal:     r.filesTotal,
+		FilesCopied:    r.filesCopied,
+		FilesSkipped:   r.filesSkipped,
+		FilesFailed:    r.filesFailed,
+		BytesTotal:     r.bytesTotal,
+		BytesCopied:    liveBytes,
+		BytesPerSecond: bps,
+		ETASeconds:     etaSeconds,
+		Error:          errMsg,
 	}})
+}
+
+type etaEstimator struct {
+	started, lastAt time.Time
+	lastBytes       int64
+	rate            float64
+	samples         int
+}
+
+func (e *etaEstimator) start(now time.Time, bytes int64) {
+	e.started, e.lastAt, e.lastBytes = now, now, bytes
+	e.rate, e.samples = 0, 0
+}
+
+func (e *etaEstimator) sample(now time.Time, copied, total int64) (int64, int64) {
+	if e.started.IsZero() {
+		e.start(now, copied)
+		return 0, 0
+	}
+	dt := now.Sub(e.lastAt).Seconds()
+	delta := copied - e.lastBytes
+	if dt > 0 && delta > 0 {
+		instant := float64(delta) / dt
+		if e.samples == 0 {
+			e.rate = instant
+		} else {
+			e.rate = 0.3*instant + 0.7*e.rate
+		}
+		e.samples++
+		e.lastAt, e.lastBytes = now, copied
+	}
+	if e.samples < 2 || now.Sub(e.started) < 5*time.Second || e.rate <= 0 || copied >= total {
+		return 0, 0
+	}
+	remaining := float64(total-copied) / e.rate
+	if remaining < 1 {
+		remaining = 1
+	}
+	return int64(e.rate), int64(remaining + 0.5)
 }

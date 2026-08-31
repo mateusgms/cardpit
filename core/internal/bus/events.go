@@ -32,12 +32,14 @@ type JobEvent struct {
 	SlotAlias  string `json:"slot_alias"`
 	Status     string `json:"status"`
 
-	FilesTotal   int   `json:"files_total"`
-	FilesCopied  int   `json:"files_copied"`
-	FilesSkipped int   `json:"files_skipped"`
-	FilesFailed  int   `json:"files_failed"`
-	BytesTotal   int64 `json:"bytes_total"`
-	BytesCopied  int64 `json:"bytes_copied"`
+	FilesTotal     int   `json:"files_total"`
+	FilesCopied    int   `json:"files_copied"`
+	FilesSkipped   int   `json:"files_skipped"`
+	FilesFailed    int   `json:"files_failed"`
+	BytesTotal     int64 `json:"bytes_total"`
+	BytesCopied    int64 `json:"bytes_copied"`
+	BytesPerSecond int64 `json:"bytes_per_second"`
+	ETASeconds     int64 `json:"eta_seconds"`
 
 	Error string `json:"error,omitempty"`
 }

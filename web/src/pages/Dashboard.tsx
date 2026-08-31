@@ -14,6 +14,16 @@ const statusLabel: Record<string, string> = {
   cancelled: 'cancelado',
 }
 
+function fmtDuration(seconds: number): string {
+  const rounded = Math.max(0, Math.round(seconds))
+  const hours = Math.floor(rounded / 3600)
+  const minutes = Math.floor((rounded % 3600) / 60)
+  const secs = rounded % 60
+  if (hours > 0) return `${hours}h ${minutes}min`
+  if (minutes > 0) return `${minutes}min ${secs}s`
+  return `${secs}s`
+}
+
 export default function Dashboard() {
   const [status, setStatus] = useState<Status | null>(null)
   const [live, setLive] = useState<Record<number, JobEventPayload>>({})
@@ -230,6 +240,8 @@ function JobCard({
   const total = live?.files_total ?? job.files_total
   const bytesTotal = live?.bytes_total ?? job.bytes_total
   const pct = bytesTotal > 0 ? Math.min(100, (bytesCopied / bytesTotal) * 100) : 0
+  const bytesPerSecond = live?.bytes_per_second ?? 0
+  const etaSeconds = live?.eta_seconds ?? 0
 
   const cancel = async () => {
     try {
@@ -268,6 +280,10 @@ function JobCard({
           <div className="muted">
             {copied}/{total} arquivos · {fmtBytes(bytesCopied)} de {fmtBytes(bytesTotal)}
             {job.files_skipped > 0 && ` · ${job.files_skipped} pulados (dedup)`}
+            {' · '}
+            {etaSeconds > 0 && bytesPerSecond > 0
+              ? `${fmtBytes(bytesPerSecond)}/s · tempo restante ${fmtDuration(etaSeconds)}`
+              : 'estimativa calculando…'}
           </div>
         </>
       )}

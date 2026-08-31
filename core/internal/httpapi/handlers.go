@@ -140,6 +140,8 @@ type destCandidateDTO struct {
 	TotalBytes  uint64 `json:"total_bytes"`
 	FreeBytes   uint64 `json:"free_bytes"`
 	System      bool   `json:"system"`
+	DeviceName  string `json:"device_name"`
+	Removable   bool   `json:"removable"`
 }
 
 // handleDestCandidates lists the volumes offered as copy destination so the
@@ -164,6 +166,8 @@ func (s *Server) handleDestCandidates(w http.ResponseWriter, r *http.Request) {
 				TotalBytes:  c.TotalBytes,
 				FreeBytes:   c.FreeBytes,
 				System:      c.System,
+				DeviceName:  c.DeviceName,
+				Removable:   c.Removable,
 			})
 		}
 	}

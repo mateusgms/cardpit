@@ -44,10 +44,13 @@ func newCopier() *copier {
 // copyOne copies entry.src into dstDir. It returns the final path and the
 // XXH3-64 hash ("%016x"). Failed attempts are retried (retryDelays), except
 // on context cancellation or a full destination disk.
-func (c *copier) copyOne(ctx context.Context, entry fileEntry, dstDir string, paranoid bool) (string, string, error) {
+func (c *copier) copyOne(ctx context.Context, entry fileEntry, dstDir string, paranoid bool, progress ...func(int64)) (string, string, error) {
 	var lastErr error
 	for attempt := 0; ; attempt++ {
-		dst, hash, err := c.copyOnce(ctx, entry, dstDir, paranoid)
+		if len(progress) > 0 {
+			progress[0](0)
+		}
+		dst, hash, err := c.copyOnce(ctx, entry, dstDir, paranoid, progress...)
 		if err == nil {
 			return dst, hash, nil
 		}
@@ -63,7 +66,7 @@ func (c *copier) copyOne(ctx context.Context, entry fileEntry, dstDir string, pa
 	}
 }
 
-func (c *copier) copyOnce(ctx context.Context, entry fileEntry, dstDir string, paranoid bool) (finalPath, hash string, err error) {
+func (c *copier) copyOnce(ctx context.Context, entry fileEntry, dstDir string, paranoid bool, progress ...func(int64)) (finalPath, hash string, err error) {
 	if err := os.MkdirAll(dstDir, 0o755); err != nil {
 		return "", "", err
 	}
@@ -90,7 +93,7 @@ func (c *copier) copyOnce(ctx context.Context, entry fileEntry, dstDir string, p
 
 	h := xxh3.New()
 	bufp := c.bufPool.Get().(*[]byte)
-	_, err = copyBufferCtx(ctx, tmp, io.TeeReader(src, h), *bufp)
+	_, err = copyBufferCtxProgress(ctx, tmp, io.TeeReader(src, h), *bufp, progress...)
 	c.bufPool.Put(bufp)
 	if err != nil {
 		cleanup()
@@ -176,6 +179,10 @@ func hashFile(ctx context.Context, path string, buf []byte) (string, error) {
 // copyBufferCtx is io.CopyBuffer with cancellation checked between chunks,
 // so a yanked-card job stops within one buffer's worth of work.
 func copyBufferCtx(ctx context.Context, dst io.Writer, src io.Reader, buf []byte) (int64, error) {
+	return copyBufferCtxProgress(ctx, dst, src, buf)
+}
+
+func copyBufferCtxProgress(ctx context.Context, dst io.Writer, src io.Reader, buf []byte, progress ...func(int64)) (int64, error) {
 	var written int64
 	for {
 		if err := ctx.Err(); err != nil {
@@ -185,6 +192,9 @@ func copyBufferCtx(ctx context.Context, dst io.Writer, src io.Reader, buf []byte
 		if n > 0 {
 			w, werr := dst.Write(buf[:n])
 			written += int64(w)
+			if len(progress) > 0 {
+				progress[0](written)
+			}
 			if werr != nil {
 				return written, werr
 			}

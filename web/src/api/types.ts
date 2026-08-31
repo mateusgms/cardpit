@@ -104,6 +104,8 @@ export interface DestCandidate {
   total_bytes: number
   free_bytes: number
   system: boolean
+  device_name: string
+  removable: boolean
 }
 
 export interface Status {
@@ -131,6 +133,8 @@ export interface JobEventPayload {
   files_failed: number
   bytes_total: number
   bytes_copied: number
+  bytes_per_second: number
+  eta_seconds: number
   error?: string
 }
 

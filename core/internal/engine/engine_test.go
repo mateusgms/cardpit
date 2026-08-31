@@ -153,9 +153,9 @@ func TestHappyPathCopiesOrganizedByDate(t *testing.T) {
 
 	files := listDest(t, e.dest)
 	want := map[string]bool{
-		"2026-07-01/IMG_0001.JPG": true,
-		"2026-07-01/IMG_0002.JPG": true,
-		"2026-07-02/MOV_0001.MP4": true,
+		"2026-07-01/Dia/IMG_0001.JPG": true,
+		"2026-07-01/Dia/IMG_0002.JPG": true,
+		"2026-07-02/Dia/MOV_0001.MP4": true,
 	}
 	if len(files) != 3 {
 		t.Fatalf("dest files: %v", files)
@@ -622,11 +622,67 @@ func TestPickFreeName(t *testing.T) {
 
 func TestExpandTemplate(t *testing.T) {
 	mt := time.Date(2026, 7, 8, 23, 30, 0, 0, time.Local)
-	if got := expandTemplate("", mt, "X"); got != "2026-07-08" {
+	if got := expandTemplate("", mt, "X"); got != filepath.Join("2026-07-08", "Noite") {
 		t.Fatalf("default: %q", got)
 	}
 	if got := expandTemplate(`{YYYY}/{MM}/{card_alias}`, mt, "Sony A7/IV"); got != "2026/07/Sony A7-IV" {
 		t.Fatalf("tokens: %q", got)
+	}
+}
+
+func TestProductionPeriodBoundaries(t *testing.T) {
+	cases := []struct {
+		hour, minute int
+		want         string
+	}{
+		{5, 59, "Noite"}, {6, 0, "Dia"}, {13, 59, "Dia"},
+		{14, 0, "Tarde"}, {17, 59, "Tarde"}, {18, 0, "Noite"},
+	}
+	for _, tc := range cases {
+		mt := time.Date(2026, 8, 31, tc.hour, tc.minute, 0, 0, time.Local)
+		if got := productionPeriod(mt); got != tc.want {
+			t.Errorf("%02d:%02d: got %q, want %q", tc.hour, tc.minute, got, tc.want)
+		}
+	}
+}
+
+func TestETAEstimatorWarmsUpAndSmooths(t *testing.T) {
+	t0 := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)
+	var e etaEstimator
+	e.start(t0, 0)
+	if bps, eta := e.sample(t0.Add(2*time.Second), 200, 2000); bps != 0 || eta != 0 {
+		t.Fatalf("estimate exposed before warm-up: %d %d", bps, eta)
+	}
+	bps, eta := e.sample(t0.Add(6*time.Second), 600, 2000)
+	if bps != 100 || eta != 14 {
+		t.Fatalf("estimate: bps=%d eta=%d", bps, eta)
+	}
+	if bps, eta := e.sample(t0.Add(8*time.Second), 2000, 2000); bps != 0 || eta != 0 {
+		t.Fatalf("completed estimate should be hidden: %d %d", bps, eta)
+	}
+}
+
+func TestStartupDiscoversEmptyReader(t *testing.T) {
+	e := newEnv(t)
+	if err := os.MkdirAll(filepath.Join(e.root, "slot-empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.m.DiscoverReaderSlots(context.Background())
+	slots, err := e.db.Slots.List(context.Background())
+	if err != nil || len(slots) != 1 {
+		t.Fatalf("slots=%+v err=%v", slots, err)
+	}
+	if slots[0].LocationPath != "FAKE#slot-empty" || slots[0].Alias == "" {
+		t.Fatalf("discovered slot: %+v", slots[0])
+	}
+}
+
+func TestSameVolumeGUIDNormalizesCaseAndSlash(t *testing.T) {
+	if !sameVolumeGUID(`\\?\Volume{ABC}\`, `\\?\volume{abc}`) {
+		t.Fatal("equivalent volume GUIDs did not match")
+	}
+	if sameVolumeGUID(`\\?\Volume{ABC}\`, `\\?\Volume{DEF}\`) {
+		t.Fatal("different volume GUIDs matched")
 	}
 }
 
