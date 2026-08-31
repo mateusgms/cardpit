@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v0.1.10] - 2026-08-31
+
+### Added
+- improve portable storage ingest workflow
+
+
 ### Added
 - descoberta de SSDs portáteis/removíveis (incluindo nome do hardware) e proteção contra ingestão do próprio destino
 - descoberta de leitores USB e cartões já conectados durante a inicialização
