@@ -5,21 +5,22 @@ import type { DestCandidate } from '../api/types'
 const MANUAL = '__manual__'
 
 function candidateLabel(c: DestCandidate): string {
-  const name = c.label || '(sem nome)'
+  const name = c.device_name || c.label || '(sem nome)'
   const parts: string[] = []
   if (c.drive_letter) parts.push(c.drive_letter)
   parts.push(name)
+  if (c.device_name && c.label && c.label !== c.device_name) parts.push(c.label)
   let text = parts.join(' — ')
   if (c.total_bytes > 0) {
     text += ` (${fmtBytes(c.free_bytes)} livres de ${fmtBytes(c.total_bytes)})`
   }
   if (c.system) text += ' — disco do Windows'
+  else if (c.removable) text += ' — USB/removível'
   return text
 }
 
-// DestPicker lists the fixed disks reported by the backend so the user picks
-// the destination by drive letter instead of pasting a volume GUID. A manual
-// mode keeps the old free-text entry for dev (fake-dest) and exotic drives.
+// DestPicker lists mounted local disks reported by the backend. A manual mode
+// keeps the old free-text entry for dev (fake-dest) and exotic drives.
 export default function DestPicker({
   value,
   onChange,
@@ -75,7 +76,7 @@ export default function DestPicker({
           />
           <p className="muted">
             {loaded && cands.length === 0 && (
-              <>Nenhum disco fixo detectado — insira o caminho manualmente. </>
+              <>Nenhum disco local detectado — insira o caminho manualmente. </>
             )}
             No Windows: <code className="mono">Get-Volume | Select FriendlyName, Path</code> no
             PowerShell. No modo de desenvolvimento (fake), use{' '}

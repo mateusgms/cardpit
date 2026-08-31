@@ -34,11 +34,12 @@ type VolumeState struct {
 }
 
 type volState struct {
-	id        platform.VolumeID
-	firstSeen time.Time
-	attached  bool
-	info      platform.VolumeInfo
-	slot      platform.SlotKey
+	id           platform.VolumeID
+	firstSeen    time.Time
+	attached     bool
+	info         platform.VolumeInfo
+	slot         platform.SlotKey
+	slotAttempts int
 }
 
 type Watcher struct {
@@ -67,6 +68,9 @@ func (w *Watcher) SetPaused(v bool) { w.paused.Store(v) }
 func (w *Watcher) Paused() bool     { return w.paused.Load() }
 
 func (w *Watcher) Run(ctx context.Context) error {
+	// Prime already-mounted media immediately. The first pass only creates
+	// debounce candidates, giving event consumers time to subscribe.
+	w.poll(ctx, time.Now())
 	t := time.NewTicker(w.opt.PollInterval)
 	defer t.Stop()
 	for {
@@ -117,8 +121,15 @@ func (w *Watcher) poll(ctx context.Context, now time.Time) {
 		}
 		slot, err := w.p.Slots.ResolveSlot(ctx, id)
 		if err != nil {
-			// Degraded: ingest proceeds without a physical slot identity.
-			w.log.Warn("watcher: slot resolution failed", "volume", guid, "err", err)
+			st.slotAttempts++
+			// Device-tree interfaces can lag behind an already-mounted volume at
+			// boot. Retry for a bounded grace period, then preserve the PRD's
+			// degraded ingest behavior.
+			if now.Sub(st.firstSeen) < w.opt.Debounce+5*time.Second {
+				w.log.Debug("watcher: slot resolution not ready; retrying", "volume", guid, "attempt", st.slotAttempts, "err", err)
+				continue
+			}
+			w.log.Warn("watcher: slot resolution failed", "volume", guid, "attempts", st.slotAttempts, "err", err)
 			slot = platform.SlotKey{}
 		}
 		st.attached = true

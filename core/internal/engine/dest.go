@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// DefaultTemplate organizes files by capture date (mtime).
-const DefaultTemplate = "{YYYY-MM-DD}"
+// DefaultTemplate organizes files by capture date and production period.
+const DefaultTemplate = "{YYYY-MM-DD}/{period}"
 
 // expandTemplate renders the destination sub-path for one file.
-// Supported tokens: {YYYY-MM-DD}, {YYYY}, {MM}, {DD}, {card_alias}.
+// Supported tokens: {YYYY-MM-DD}, {YYYY}, {MM}, {DD}, {period}, {card_alias}.
 // The file's mtime is interpreted in the machine's local timezone (cameras
 // set mtime to capture time; see docs for the DST caveat).
 func expandTemplate(tpl string, mtime time.Time, cardAlias string) string {
@@ -23,9 +23,22 @@ func expandTemplate(tpl string, mtime time.Time, cardAlias string) string {
 		"{YYYY}", local.Format("2006"),
 		"{MM}", local.Format("01"),
 		"{DD}", local.Format("02"),
+		"{period}", productionPeriod(local),
 		"{card_alias}", sanitizePathComponent(cardAlias),
 	)
 	return r.Replace(tpl)
+}
+
+func productionPeriod(local time.Time) string {
+	hour := local.Hour()
+	switch {
+	case hour >= 6 && hour < 14:
+		return "Dia"
+	case hour >= 14 && hour < 18:
+		return "Tarde"
+	default:
+		return "Noite"
+	}
 }
 
 // sanitizePathComponent keeps card aliases from injecting separators or

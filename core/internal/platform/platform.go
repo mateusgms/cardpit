@@ -37,7 +37,9 @@ type DestCandidate struct {
 	Filesystem  string
 	TotalBytes  uint64
 	FreeBytes   uint64
-	System      bool // the OS system drive; shown to the user with a warning
+	System      bool   // the OS system drive; shown to the user with a warning
+	DeviceName  string // hardware model, e.g. "Samsung Portable SSD T5"
+	Removable   bool   // Windows reports removable media for the backing disk
 }
 
 // SlotKey is the stable identity of a physical reader slot: the USB location
@@ -46,6 +48,13 @@ type DestCandidate struct {
 type SlotKey struct {
 	LocationPath string
 	LUN          int
+}
+
+// ReaderSlot is a reader interface Windows can see even when no volume is
+// mounted. DeviceName is diagnostic/display metadata; Key is the identity.
+type ReaderSlot struct {
+	Key        SlotKey
+	DeviceName string
 }
 
 var (
@@ -93,6 +102,13 @@ type DestCandidateLister interface {
 	ListDestCandidates(ctx context.Context) ([]DestCandidate, error)
 }
 
+type ReaderSlotLister interface {
+	// ListReaderSlots returns USB removable-media disk interfaces. Some
+	// readers expose no interface until a card is inserted, so this is
+	// intentionally best-effort.
+	ListReaderSlots(ctx context.Context) ([]ReaderSlot, error)
+}
+
 // Platform bundles the full set; app wiring picks the implementation.
 type Platform struct {
 	Volumes  VolumeLister
@@ -102,4 +118,5 @@ type Platform struct {
 	Dest     DestResolver
 	Space    FreeSpacer
 	DestList DestCandidateLister
+	Readers  ReaderSlotLister
 }

@@ -20,6 +20,7 @@ import (
 // IOCTLs (winioctl.h — values are ABI-stable).
 const (
 	ioctlStorageGetDeviceNumber = 0x002D1080
+	ioctlStorageQueryProperty   = 0x002D1400
 	ioctlStorageEjectMedia      = 0x002D4808
 	fsctlLockVolume             = 0x00090018
 	fsctlDismountVolume         = 0x00090020
@@ -27,10 +28,129 @@ const (
 	fileDeviceDisk = 0x00000007
 )
 
+const busTypeUSB = 7
+
 type storageDeviceNumber struct {
 	DeviceType      uint32
 	DeviceNumber    uint32
 	PartitionNumber int32
+}
+
+type diskMetadata struct {
+	name      string
+	removable bool
+	busType   uint32
+}
+
+// ListReaderSlots discovers USB removable-media disk interfaces, including
+// empty readers when their driver keeps the disk PDO alive without media.
+func (w *winPlatform) ListReaderSlots(ctx context.Context) ([]platform.ReaderSlot, error) {
+	paths, err := diskInterfacePaths()
+	if err != nil {
+		return nil, err
+	}
+	seen := map[platform.SlotKey]bool{}
+	var out []platform.ReaderSlot
+	for _, path := range paths {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		meta, err := diskMetadataForPath(path)
+		if err != nil || meta.busType != busTypeUSB || !meta.removable {
+			continue
+		}
+		instanceID, err := interfaceInstanceID(path)
+		if err != nil {
+			continue
+		}
+		devInst, err := locateDevNode(instanceID)
+		if err != nil {
+			continue
+		}
+		location, err := findLocationPath(devInst)
+		if err != nil || location == "" {
+			continue
+		}
+		key := platform.SlotKey{LocationPath: location, LUN: resolveLUN(devInst, instanceID)}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, platform.ReaderSlot{Key: key, DeviceName: meta.name})
+	}
+	return out, nil
+}
+
+func diskMetadataByNumber(devNum uint32) (diskMetadata, error) {
+	paths, err := diskInterfacePaths()
+	if err != nil {
+		return diskMetadata{}, err
+	}
+	for _, path := range paths {
+		h, err := openDeviceHandle(path)
+		if err != nil {
+			continue
+		}
+		var sdn storageDeviceNumber
+		var returned uint32
+		err = windows.DeviceIoControl(h, ioctlStorageGetDeviceNumber, nil, 0,
+			(*byte)(unsafe.Pointer(&sdn)), uint32(unsafe.Sizeof(sdn)), &returned, nil)
+		windows.CloseHandle(h)
+		if err == nil && sdn.DeviceType == fileDeviceDisk && sdn.DeviceNumber == devNum {
+			return diskMetadataForPath(path)
+		}
+	}
+	return diskMetadata{}, fmt.Errorf("no disk interface metadata for device number %d", devNum)
+}
+
+func diskMetadataForPath(path string) (diskMetadata, error) {
+	h, err := openDeviceHandle(path)
+	if err != nil {
+		return diskMetadata{}, err
+	}
+	defer windows.CloseHandle(h)
+	// STORAGE_PROPERTY_QUERY{PropertyId: StorageDeviceProperty, QueryType: PropertyStandardQuery}.
+	query := [8]byte{}
+	buf := make([]byte, 4096)
+	var returned uint32
+	if err := windows.DeviceIoControl(h, ioctlStorageQueryProperty,
+		&query[0], uint32(len(query)), &buf[0], uint32(len(buf)), &returned, nil); err != nil {
+		return diskMetadata{}, err
+	}
+	if returned < 36 {
+		return diskMetadata{}, fmt.Errorf("short STORAGE_DEVICE_DESCRIPTOR: %d", returned)
+	}
+	buf = buf[:returned]
+	parts := []string{
+		descriptorString(buf, binary.LittleEndian.Uint32(buf[12:16])),
+		descriptorString(buf, binary.LittleEndian.Uint32(buf[16:20])),
+	}
+	return diskMetadata{
+		name:      strings.TrimSpace(strings.Join(nonEmpty(parts), " ")),
+		removable: buf[10] != 0,
+		busType:   binary.LittleEndian.Uint32(buf[28:32]),
+	}, nil
+}
+
+func descriptorString(buf []byte, offset uint32) string {
+	if offset == 0 || int(offset) >= len(buf) {
+		return ""
+	}
+	b := buf[offset:]
+	if i := strings.IndexByte(string(b), 0); i >= 0 {
+		b = b[:i]
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func nonEmpty(values []string) []string {
+	out := values[:0]
+	for _, value := range values {
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 // ResolveSlot walks the chain

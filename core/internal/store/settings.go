@@ -11,7 +11,7 @@ import (
 // landing here.
 const (
 	SetDestVolumeGUID     = "dest_volume_guid"
-	SetDestTemplate       = "dest_template" // default "{YYYY-MM-DD}"
+	SetDestTemplate       = "dest_template" // default "{YYYY-MM-DD}/{period}"
 	SetMaxConcurrent      = "max_concurrent_jobs"
 	SetVerifyMode         = "verify_mode" // "fast" | "paranoid"
 	SetEjectAfterCopy     = "eject_after_copy"

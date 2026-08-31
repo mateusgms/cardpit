@@ -4,6 +4,7 @@ package win
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -20,7 +21,7 @@ type winPlatform struct{}
 func New() platform.Platform {
 	w := &winPlatform{}
 	return platform.Platform{
-		Volumes: w, Info: w, Slots: w, Eject: w, Dest: w, Space: w, DestList: w,
+		Volumes: w, Info: w, Slots: w, Eject: w, Dest: w, Space: w, DestList: w, Readers: w,
 	}
 }
 
@@ -47,53 +48,106 @@ func (w *winPlatform) ListRemovableVolumes(ctx context.Context) ([]platform.Volu
 			// Volume can vanish between the two calls; skip quietly.
 			continue
 		}
+		// DRIVE_REMOVABLE alone is not enough: some portable SSD bridges use
+		// it too. A storage descriptor that explicitly says the backing disk
+		// is not removable media is a destination disk, not a source card.
+		if devNum, err := volumeDeviceNumber(guid); err == nil {
+			if meta, err := diskMetadataByNumber(devNum); err == nil && !meta.removable {
+				continue
+			}
+		}
 		out = append(out, platform.VolumeID{DriveLetter: letter, GUIDPath: guid})
 	}
 	return out, nil
 }
 
-// ListDestCandidates returns the fixed drives the user can pick as the copy
-// destination. The system drive is included but flagged.
+// ListDestCandidates enumerates mounted local volumes by stable volume GUID,
+// rather than only drive letters. Portable SSDs are variously reported as
+// DRIVE_FIXED or DRIVE_REMOVABLE and may be mounted into a directory.
 func (w *winPlatform) ListDestCandidates(ctx context.Context) ([]platform.DestCandidate, error) {
-	mask, err := windows.GetLogicalDrives()
+	volumes, err := mountedVolumes()
 	if err != nil {
-		return nil, fmt.Errorf("GetLogicalDrives: %w", err)
+		return nil, err
 	}
-	sysDrive := strings.ToUpper(strings.TrimSuffix(os.Getenv("SystemDrive"), `\`)) // "C:"
+	sysRoot := strings.ToUpper(strings.TrimSuffix(os.Getenv("SystemDrive"), `\`) + `\`)
 	var out []platform.DestCandidate
-	for i := 0; i < 26; i++ {
-		if mask&(1<<i) == 0 {
-			continue
-		}
-		letter := string(rune('A'+i)) + ":"
-		root, err := windows.UTF16PtrFromString(letter + `\`)
+	for _, vol := range volumes {
+		rootP, err := windows.UTF16PtrFromString(vol.mount)
 		if err != nil {
 			continue
 		}
-		if windows.GetDriveType(root) != windows.DRIVE_FIXED {
-			continue
-		}
-		guid, err := volumeGUIDForRoot(letter + `\`)
-		if err != nil {
-			// Volume can vanish between the two calls; skip quietly.
+		driveType := windows.GetDriveType(rootP)
+		if driveType != windows.DRIVE_FIXED && driveType != windows.DRIVE_REMOVABLE {
 			continue
 		}
 		cand := platform.DestCandidate{
-			DriveLetter: letter,
-			GUIDPath:    guid,
-			System:      letter == sysDrive,
+			DriveLetter: driveLetter(vol.mount),
+			GUIDPath:    vol.guid,
+			System:      strings.EqualFold(vol.mount, sysRoot),
+			Removable:   driveType == windows.DRIVE_REMOVABLE,
 		}
 		// Best effort: a BitLocker-locked or dying volume still shows up,
 		// just without label/sizes.
-		if info, err := w.VolumeInfo(ctx, platform.VolumeID{DriveLetter: letter, GUIDPath: guid}); err == nil {
+		if info, err := volumeInfoForRoot(vol.mount); err == nil {
 			cand.Label = info.Label
 			cand.Filesystem = info.Filesystem
 			cand.TotalBytes = info.TotalBytes
 			cand.FreeBytes = info.FreeBytes
 		}
+		if devNum, err := volumeDeviceNumber(vol.guid); err == nil {
+			if meta, err := diskMetadataByNumber(devNum); err == nil {
+				cand.DeviceName = meta.name
+				cand.Removable = meta.removable
+			}
+		}
 		out = append(out, cand)
 	}
 	return out, nil
+}
+
+type mountedVolume struct{ guid, mount string }
+
+func mountedVolumes() ([]mountedVolume, error) {
+	buf := make([]uint16, 1024)
+	h, err := windows.FindFirstVolume(&buf[0], uint32(len(buf)))
+	if err != nil {
+		return nil, fmt.Errorf("FindFirstVolume: %w", err)
+	}
+	defer windows.FindVolumeClose(h)
+	var out []mountedVolume
+	for {
+		guid := windows.UTF16ToString(buf)
+		guidP, convErr := windows.UTF16PtrFromString(guid)
+		if convErr == nil {
+			paths := make([]uint16, 4096)
+			var returned uint32
+			if err := windows.GetVolumePathNamesForVolumeName(guidP, &paths[0], uint32(len(paths)), &returned); err == nil {
+				for _, mount := range splitUTF16MultiSz(paths) {
+					if mount != "" {
+						out = append(out, mountedVolume{guid: guid, mount: mount})
+						break
+					}
+				}
+			}
+		}
+		for i := range buf {
+			buf[i] = 0
+		}
+		if err := windows.FindNextVolume(h, &buf[0], uint32(len(buf))); err != nil {
+			if errors.Is(err, windows.ERROR_NO_MORE_FILES) {
+				break
+			}
+			return nil, fmt.Errorf("FindNextVolume: %w", err)
+		}
+	}
+	return out, nil
+}
+
+func driveLetter(mount string) string {
+	if len(mount) >= 3 && mount[1] == ':' && (mount[2] == '\\' || mount[2] == '/') {
+		return strings.ToUpper(mount[:2])
+	}
+	return ""
 }
 
 // volumeGUIDForRoot maps "E:\" to `\\?\Volume{...}\`.
@@ -111,6 +165,10 @@ func volumeGUIDForRoot(root string) (string, error) {
 
 func (w *winPlatform) VolumeInfo(ctx context.Context, v platform.VolumeID) (platform.VolumeInfo, error) {
 	root := v.DriveLetter + `\`
+	return volumeInfoForRoot(root)
+}
+
+func volumeInfoForRoot(root string) (platform.VolumeInfo, error) {
 	rootP, err := windows.UTF16PtrFromString(root)
 	if err != nil {
 		return platform.VolumeInfo{}, err

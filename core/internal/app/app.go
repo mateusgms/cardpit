@@ -87,6 +87,7 @@ func (a *App) Run(ctx context.Context) error {
 	if a.DB.Settings.GetBool(ctx, store.SetWatcherPaused, false) {
 		a.Watcher.SetPaused(true)
 	}
+	a.Manager.DiscoverReaderSlots(ctx)
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return ignoreCancel(a.Watcher.Run(gctx)) })

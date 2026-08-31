@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- descoberta de SSDs portáteis/removíveis (incluindo nome do hardware) e proteção contra ingestão do próprio destino
+- descoberta de leitores USB e cartões já conectados durante a inicialização
+- pastas padrão por data e período (`Dia`, `Tarde`, `Noite`)
+- estimativa ao vivo de velocidade e tempo restante no painel e Telegram
+
 ## [v0.1.9] - 2026-07-20
 
 ### Added

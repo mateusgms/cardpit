@@ -36,7 +36,7 @@ const (
 func New(root, destDir string) platform.Platform {
 	f := &fakePlatform{root: root, dest: destDir}
 	return platform.Platform{
-		Volumes: f, Info: f, Slots: f, Eject: f, Dest: f, Space: f, DestList: f,
+		Volumes: f, Info: f, Slots: f, Eject: f, Dest: f, Space: f, DestList: f, Readers: f,
 	}
 }
 
@@ -127,6 +127,26 @@ func (f *fakePlatform) ResolveSlot(ctx context.Context, v platform.VolumeID) (pl
 		return platform.SlotKey{}, platform.ErrSlotUnknown
 	}
 	return platform.SlotKey{LocationPath: "FAKE#" + slot, LUN: 0}, nil
+}
+
+func (f *fakePlatform) ListReaderSlots(ctx context.Context) ([]platform.ReaderSlot, error) {
+	entries, err := os.ReadDir(f.root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []platform.ReaderSlot
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+			out = append(out, platform.ReaderSlot{
+				Key:        platform.SlotKey{LocationPath: "FAKE#" + entry.Name()},
+				DeviceName: "Fake reader " + entry.Name(),
+			})
+		}
+	}
+	return out, nil
 }
 
 func (f *fakePlatform) Eject(ctx context.Context, v platform.VolumeID) error {
