@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - atualização manual explicita o canal público e a versão instalada usada na comparação
 - SSD de destino reconectado é redetectado automaticamente pelo serviço e pela UI em até 5 segundos
 
+## [v0.1.11] - 2026-09-01
+
+### Added
+- publish updates from public release channel
+
+
+## [v0.1.10] - 2026-08-31
+
+### Added
+- improve portable storage ingest workflow
+
 ### Added
 - descoberta de SSDs portáteis/removíveis (incluindo nome do hardware) e proteção contra ingestão do próprio destino
 - descoberta de leitores USB e cartões já conectados durante a inicialização
