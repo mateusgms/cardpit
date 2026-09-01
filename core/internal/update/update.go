@@ -20,10 +20,13 @@ import (
 )
 
 const (
-	defaultAPIBase = "https://api.github.com"
-	checkInterval  = 24 * time.Hour
-	startupDelay   = 30 * time.Second
-	busyRetry      = 10 * time.Minute
+	// PublicReleaseRepo is the credential-free public repository used for
+	// update discovery and downloads. Keep this separate from the source repo.
+	PublicReleaseRepo = "mateusgms/cardpit-releases"
+	defaultAPIBase    = "https://api.github.com"
+	checkInterval     = 24 * time.Hour
+	startupDelay      = 30 * time.Second
+	busyRetry         = 10 * time.Minute
 )
 
 // Updater checks for newer GitHub Releases and swaps the running executable.

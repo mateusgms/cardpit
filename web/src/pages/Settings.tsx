@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Settings } from '../api/types'
+import type { Status } from '../api/types'
 import DestPicker from '../components/DestPicker'
 
 export default function SettingsPage() {
@@ -11,6 +12,7 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [saving, setSaving] = useState(false)
+  const [version, setVersion] = useState('')
 
   useEffect(() => {
     api<{ settings: Settings; has_telegram_token: boolean }>('/api/settings').then((r) => {
@@ -18,6 +20,7 @@ export default function SettingsPage() {
       setHasTgToken(r.has_telegram_token)
       setInitialChatIds(r.settings.telegram_chat_ids ?? '')
     })
+    api<Status>('/api/status').then((r) => setVersion(r.version)).catch(() => {})
   }, [])
 
   const set = (k: string, v: string) => setS((prev) => ({ ...prev, [k]: v }))
@@ -200,7 +203,9 @@ export default function SettingsPage() {
         </label>
         <div className="row">
           <button onClick={checkUpdate}>Verificar agora</button>
-          <span className="muted">Inicia uma verificação imediata em background.</span>
+          <span className="muted">
+            Versão instalada: {version || 'desconhecida'}. Consulta o canal público de releases.
+          </span>
         </div>
       </div>
 

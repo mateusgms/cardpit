@@ -21,7 +21,7 @@ import (
 // destRetryInterval is how often pending jobs blocked on a missing
 // destination SSD are retried. The watcher only reports removable volumes,
 // so a fixed destination drive appearing is only noticed here.
-const destRetryInterval = 30 * time.Second
+const destRetryInterval = 5 * time.Second
 
 // defaultDestDrive is auto-selected as the destination while dest_volume_guid
 // is empty (kiosk mode: the machine has no keyboard to pick one in the UI).
@@ -36,7 +36,7 @@ type Manager struct {
 	copier *copier
 
 	sem  chan struct{}
-	kick chan struct{} // wakes retryBlocked outside the 30s tick
+	kick chan struct{} // wakes retryBlocked outside the periodic tick
 
 	mu       sync.Mutex
 	byGUID   map[string]*runningJob // volumes with an admitted job

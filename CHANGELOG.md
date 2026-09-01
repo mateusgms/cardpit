@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- atualização manual explicita o canal público e a versão instalada usada na comparação
+- SSD de destino reconectado é redetectado automaticamente pelo serviço e pela UI em até 5 segundos
+
 ### Added
 - descoberta de SSDs portáteis/removíveis (incluindo nome do hardware) e proteção contra ingestão do próprio destino
 - descoberta de leitores USB e cartões já conectados durante a inicialização
