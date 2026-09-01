@@ -18,10 +18,9 @@ Nenhum. Apenas o arquivo `cardpit.exe` (Windows x64).
 5. Confira na interface (tudo já vem configurado para o modo kiosk):
    - **SSD de destino** — a unidade **D:** é selecionada automaticamente
      quando montada; use o seletor só para escolher outro disco
-   - **Bot do Telegram** — o token e o **chat_id** já vêm embutidos nas
-     versões oficiais ("já configurado" na tela); basta testar com
-     "Enviar mensagem de teste". Os campos servem só para trocar de bot
-     ou de chat.
+   - **Bot do Telegram** — informe o token e o **chat_id** e use
+     "Enviar mensagem de teste". As releases públicas não contêm
+     credenciais.
    - **Slots** — cada leitor ganha um nome fixo automaticamente na primeira
      vez que um cartão é inserido (avisado no Telegram); etiquete o leitor
      físico com o nome atribuído. A aba Slots guarda o histórico.
@@ -55,6 +54,6 @@ cardpit.exe stop
 cardpit.exe uninstall
 ```
 
-## Suporte
+## Releases e suporte
 
-Repositório: https://github.com/mateusgms/cardpit
+Releases: https://github.com/mateusgms/cardpit-releases/releases

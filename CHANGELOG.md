@@ -17,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - descoberta de leitores USB e cartões já conectados durante a inicialização
 - pastas padrão por data e período (`Dia`, `Tarde`, `Noite`)
 - estimativa ao vivo de velocidade e tempo restante no painel e Telegram
+- canal público de releases para atualização manual e automática sem acesso ao repositório privado
+
+### Changed
+- releases públicas não incorporam mais credenciais do Telegram; novas instalações configuram token e chats pela UI ou pelo ambiente do serviço
 
 ## [v0.1.9] - 2026-07-20
 

@@ -41,12 +41,10 @@ sempre embute a UI real.
    - o volume GUID do SSD de destino (`Get-Volume` no PowerShell) — se a
      unidade **D:** estiver montada, ela é selecionada automaticamente;
    - o bot do Telegram (token + chat_id) — use "Enviar mensagem de teste".
-     Nas releases oficiais o token e o chat_id já vêm **embutidos no exe**
-     (a pipeline carimba as secrets `TELEGRAM_KEY` e `TELEGRAM_CHAT_ID` do
-     GitHub Environment via `make release TELEGRAM_KEY=...
-     TELEGRAM_CHAT_ID=...`); as variáveis de ambiente `TELEGRAM_KEY` e
-     `TELEGRAM_CHAT_ID` no boot têm precedência sobre os valores embutidos,
-     e valores salvos pela UI têm precedência permanente sobre ambos;
+     As releases públicas nunca contêm credenciais. Para provisionamento
+     automatizado, defina `TELEGRAM_KEY` e `TELEGRAM_CHAT_ID` no ambiente do
+     serviço antes do primeiro boot; valores salvos pela UI têm precedência
+     permanente sobre o ambiente;
    - slots ganham nomes fixos automaticamente na primeira inserção (aba
      **Slots** mostra o histórico — etiquete cada leitor físico com o nome
      atribuído); cartões desconhecidos são copiados por padrão (modo kiosk).
@@ -55,6 +53,14 @@ sempre embute a UI real.
 
 Checklist de validação em hardware real:
 [`docs/windows-syscalls.md`](docs/windows-syscalls.md).
+
+## Releases e atualizações
+
+O código-fonte permanece privado. Binários neutros, checksums e pacotes de
+instalação são publicados em
+[`mateusgms/cardpit-releases`](https://github.com/mateusgms/cardpit-releases/releases).
+O atualizador consulta esse canal público sem armazenar credenciais do GitHub
+no executável.
 
 ## Desenvolvimento sem Windows
 

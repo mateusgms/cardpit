@@ -93,7 +93,7 @@ func (p *program) runApp(ctx context.Context, cancel context.CancelFunc) error {
 	defer a.Close()
 
 	exe, _ := os.Executable()
-	upd := update.New("mateusgms/cardpit", version, exe, a.DB, p.log)
+	upd := update.New("mateusgms/cardpit-releases", version, exe, a.DB, p.log)
 
 	srv := httpapi.New(a.DB, a.Bus, a.Watcher, a.Manager, a.Secrets, p.cfg.Listen,
 		p.log, p.ring, p.level)

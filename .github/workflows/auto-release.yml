@@ -4,19 +4,37 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: auto-release-main
+  cancel-in-progress: false
+
 permissions:
   contents: write
+
+env:
+  PUBLIC_RELEASE_REPOSITORY: mateusgms/cardpit-releases
 
 jobs:
   tag-and-release:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
-    # DESKTOP holds the TELEGRAM_KEY secret stamped into the release exe.
+    # DESKTOP holds PUBLIC_RELEASE_TOKEN, a fine-grained token with Contents:
+    # write access only to the public release repository.
     environment: DESKTOP
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify public release repository access
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+        run: |
+          visibility=$(gh repo view "$PUBLIC_RELEASE_REPOSITORY" --json visibility --jq .visibility)
+          if [ "$visibility" != "PUBLIC" ]; then
+            echo "::error::$PUBLIC_RELEASE_REPOSITORY must exist and be public"
+            exit 1
+          fi
 
       - name: Compute next version
         id: version
@@ -124,16 +142,19 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Build and package release
-        env:
-          TELEGRAM_KEY: ${{ secrets.TELEGRAM_KEY }}
         run: make zip VERSION=${{ steps.version.outputs.tag }}
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          body: ${{ steps.notes.outputs.notes }}
-          files: |
-            dist/cardpit.exe
-            dist/checksums.txt
-            dist/cardpit-${{ steps.version.outputs.tag }}-windows-amd64.zip
+      - name: Publish public GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
+        run: |
+          gh release create "$TAG" \
+            "dist/cardpit.exe" \
+            "dist/checksums.txt" \
+            "dist/cardpit-${TAG}-windows-amd64.zip" \
+            --repo "$PUBLIC_RELEASE_REPOSITORY" \
+            --target main \
+            --title "$TAG" \
+            --notes "$RELEASE_NOTES"
