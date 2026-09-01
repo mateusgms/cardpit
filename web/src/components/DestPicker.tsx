@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, fmtBytes } from '../api/client'
 import type { DestCandidate } from '../api/types'
 
@@ -32,12 +32,18 @@ export default function DestPicker({
   const [loaded, setLoaded] = useState(false)
   const [manual, setManual] = useState(false)
 
-  useEffect(() => {
-    api<{ candidates: DestCandidate[] | null }>('/api/volumes/dest-candidates')
+  const refresh = useCallback(() => {
+    return api<{ candidates: DestCandidate[] | null }>('/api/volumes/dest-candidates')
       .then((r) => setCands(r.candidates ?? []))
       .catch(() => {})
       .finally(() => setLoaded(true))
   }, [])
+
+  useEffect(() => {
+    refresh()
+    const timer = window.setInterval(refresh, 5000)
+    return () => window.clearInterval(timer)
+  }, [refresh])
 
   const known = cands.some((c) => c.volume_guid === value)
   const showManual = manual || (loaded && cands.length === 0)
@@ -98,6 +104,7 @@ export default function DestPicker({
           </p>
         </>
       )}
+      <button type="button" onClick={refresh}>Atualizar discos</button>
     </>
   )
 }

@@ -42,6 +42,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     refresh()
+    // Fixed USB disks do not emit source-volume SSE events. Poll so a
+    // reconnected destination is reflected without reloading the page.
+    const timer = window.setInterval(refresh, 5000)
+    return () => window.clearInterval(timer)
   }, [refresh])
 
   useEvents((topic, data) => {
