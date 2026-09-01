@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v0.1.12] - 2026-09-01
+
+### Fixed
+- refresh reconnected destination and update status
+
 ### Fixed
 - atualização manual explicita o canal público e a versão instalada usada na comparação
 - SSD de destino reconectado é redetectado automaticamente pelo serviço e pela UI em até 5 segundos
