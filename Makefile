@@ -1,17 +1,6 @@
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-# Optional Telegram bot token and chat ID allowlist stamped into the binary
-# (release pipeline passes the TELEGRAM_KEY/TELEGRAM_CHAT_ID secrets) so the
-# exe ships with Telegram pre-configured.
-TELEGRAM_KEY ?=
-TELEGRAM_CHAT_ID ?=
 GOFLAGS  = -trimpath
 LDFLAGS  = -s -w -X main.version=$(VERSION)
-ifneq ($(TELEGRAM_KEY),)
-LDFLAGS += -X github.com/mateusgms/cardpit/core/internal/notify.buildTelegramKey=$(TELEGRAM_KEY)
-endif
-ifneq ($(TELEGRAM_CHAT_ID),)
-LDFLAGS += -X github.com/mateusgms/cardpit/core/internal/notify.buildTelegramChatID=$(TELEGRAM_CHAT_ID)
-endif
 # Windows release links against the GUI subsystem so a double-click shows no
 # console window; CLI subcommands re-attach to the parent console at startup.
 LDFLAGS_WIN = $(LDFLAGS) -H=windowsgui

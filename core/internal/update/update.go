@@ -28,7 +28,7 @@ const (
 
 // Updater checks for newer GitHub Releases and swaps the running executable.
 type Updater struct {
-	repo    string // e.g. "mateusgms/cardpit"
+	repo    string // e.g. "mateusgms/cardpit-releases"
 	version string // ldflags-injected, e.g. "v0.1.0"
 	exePath string // from os.Executable()
 	db      *store.DB

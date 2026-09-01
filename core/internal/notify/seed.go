@@ -10,38 +10,19 @@ import (
 	"github.com/mateusgms/cardpit/core/internal/store"
 )
 
-// EnvTelegramKey is the environment variable that pre-configures the Telegram
-// bot token: in CI it comes from the TELEGRAM_KEY secret of the GitHub
-// environment; locally it is a plain process/service env var.
+// EnvTelegramKey is the runtime environment variable that pre-configures the
+// Telegram bot token.
 const EnvTelegramKey = "TELEGRAM_KEY"
 
-// EnvTelegramChatID is the environment variable that pre-configures the
-// Telegram chat ID allowlist (comma-separated), mirroring EnvTelegramKey: in
-// CI it comes from the TELEGRAM_CHAT_ID secret of the GitHub environment;
-// locally it is a plain process/service env var.
+// EnvTelegramChatID is the runtime environment variable that pre-configures
+// the Telegram chat ID allowlist (comma-separated).
 const EnvTelegramChatID = "TELEGRAM_CHAT_ID"
 
-// buildTelegramKey is stamped into release binaries by the pipeline via
-// -ldflags "-X .../notify.buildTelegramKey=<token>" (see the Makefile), so a
-// distributed exe comes with Telegram pre-configured. The TELEGRAM_KEY env
-// var, when set, takes precedence over the stamped value.
-var buildTelegramKey string
-
-// buildTelegramChatID is the chat-ID counterpart of buildTelegramKey, stamped
-// via -ldflags "-X .../notify.buildTelegramChatID=<id>". The TELEGRAM_CHAT_ID
-// env var, when set, takes precedence over the stamped value.
-var buildTelegramChatID string
-
-// SeedTelegramTokenFromEnv seals the pre-configured token (TELEGRAM_KEY env
-// var, falling back to the build-time stamp) into the settings on boot so a
-// fresh install comes up with Telegram already configured. A token entered
-// through the UI always wins: once telegram_token_source is "ui" (or a token
-// predates the marker) the pre-configured value is ignored.
+// SeedTelegramTokenFromEnv seals the runtime TELEGRAM_KEY into the settings on
+// boot. A token entered through the UI always wins: once telegram_token_source
+// is "ui" (or a token predates the marker) the environment value is ignored.
 func SeedTelegramTokenFromEnv(ctx context.Context, db *store.DB, secrets secret.SecretBox, log *slog.Logger) {
 	token := strings.TrimSpace(os.Getenv(EnvTelegramKey))
-	if token == "" {
-		token = strings.TrimSpace(buildTelegramKey)
-	}
 	seedTelegramToken(ctx, db, secrets, log, token)
 }
 
@@ -76,19 +57,13 @@ func seedTelegramToken(ctx context.Context, db *store.DB, secrets secret.SecretB
 		log.Error("notify: storing telegram token source", "err", err)
 		return
 	}
-	log.Info("notify: telegram token pré-configurado aplicado (env " +
-		EnvTelegramKey + " ou build)")
+	log.Info("notify: telegram token pré-configurado aplicado (env " + EnvTelegramKey + ")")
 }
 
-// SeedTelegramChatIDsFromEnv writes the pre-configured chat ID allowlist
-// (TELEGRAM_CHAT_ID env var, falling back to the build-time stamp) into the
-// settings on boot, with the same precedence rules as the token seed: chat
-// IDs entered through the UI always win.
+// SeedTelegramChatIDsFromEnv writes the runtime TELEGRAM_CHAT_ID allowlist
+// into the settings on boot. Chat IDs entered through the UI always win.
 func SeedTelegramChatIDsFromEnv(ctx context.Context, db *store.DB, log *slog.Logger) {
 	chatIDs := strings.TrimSpace(os.Getenv(EnvTelegramChatID))
-	if chatIDs == "" {
-		chatIDs = strings.TrimSpace(buildTelegramChatID)
-	}
 	seedTelegramChatIDs(ctx, db, log, chatIDs)
 }
 
@@ -120,6 +95,5 @@ func seedTelegramChatIDs(ctx context.Context, db *store.DB, log *slog.Logger, ch
 		log.Error("notify: storing telegram chat ids source", "err", err)
 		return
 	}
-	log.Info("notify: telegram chat IDs pré-configurados aplicados (env " +
-		EnvTelegramChatID + " ou build)")
+	log.Info("notify: telegram chat IDs pré-configurados aplicados (env " + EnvTelegramChatID + ")")
 }

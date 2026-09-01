@@ -89,27 +89,32 @@ func TestSeedTelegramToken(t *testing.T) {
 			t.Fatal("token stored for empty env value")
 		}
 	})
+
+	t.Run("empty env preserves previously seeded token", func(t *testing.T) {
+		db, ctx := newSeedDB(t)
+		seedTelegramToken(ctx, db, box, discard, "tok-existing")
+		seedTelegramToken(ctx, db, box, discard, "")
+		if got, ok := storedToken(t, ctx, db); !ok || got != "tok-existing" {
+			t.Fatalf("token = %q, %v; want preserved tok-existing", got, ok)
+		}
+	})
 }
 
 func TestSeedSourcePrecedence(t *testing.T) {
 	box := secret.PlainBox{}
-	old := buildTelegramKey
-	t.Cleanup(func() { buildTelegramKey = old })
 
-	t.Run("build-time key used when env unset", func(t *testing.T) {
+	t.Run("empty env does not seed", func(t *testing.T) {
 		db, ctx := newSeedDB(t)
 		t.Setenv(EnvTelegramKey, "")
-		buildTelegramKey = "tok-build"
 		SeedTelegramTokenFromEnv(ctx, db, box, discard)
-		if got, _ := storedToken(t, ctx, db); got != "tok-build" {
-			t.Fatalf("token = %q; want tok-build", got)
+		if _, ok := storedToken(t, ctx, db); ok {
+			t.Fatal("token stored with empty environment")
 		}
 	})
 
-	t.Run("env var wins over build-time key", func(t *testing.T) {
+	t.Run("runtime env seeds token", func(t *testing.T) {
 		db, ctx := newSeedDB(t)
 		t.Setenv(EnvTelegramKey, "tok-env")
-		buildTelegramKey = "tok-build"
 		SeedTelegramTokenFromEnv(ctx, db, box, discard)
 		if got, _ := storedToken(t, ctx, db); got != "tok-env" {
 			t.Fatalf("token = %q; want tok-env", got)
@@ -177,6 +182,15 @@ func TestSeedTelegramChatIDs(t *testing.T) {
 		}
 	})
 
+	t.Run("empty env preserves previously seeded chat ids", func(t *testing.T) {
+		db, ctx := newSeedDB(t)
+		seedTelegramChatIDs(ctx, db, discard, "111,222")
+		seedTelegramChatIDs(ctx, db, discard, "")
+		if got, ok := storedChatIDs(t, ctx, db); !ok || got != "111,222" {
+			t.Fatalf("chat ids = %q, %v; want preserved 111,222", got, ok)
+		}
+	})
+
 	t.Run("rejects value without any valid chat id", func(t *testing.T) {
 		db, ctx := newSeedDB(t)
 		seedTelegramChatIDs(ctx, db, discard, "abc, ,")
@@ -187,23 +201,18 @@ func TestSeedTelegramChatIDs(t *testing.T) {
 }
 
 func TestSeedChatIDsSourcePrecedence(t *testing.T) {
-	old := buildTelegramChatID
-	t.Cleanup(func() { buildTelegramChatID = old })
-
-	t.Run("build-time chat id used when env unset", func(t *testing.T) {
+	t.Run("empty env does not seed", func(t *testing.T) {
 		db, ctx := newSeedDB(t)
 		t.Setenv(EnvTelegramChatID, "")
-		buildTelegramChatID = "555"
 		SeedTelegramChatIDsFromEnv(ctx, db, discard)
-		if got, _ := storedChatIDs(t, ctx, db); got != "555" {
-			t.Fatalf("chat ids = %q; want 555", got)
+		if _, ok := storedChatIDs(t, ctx, db); ok {
+			t.Fatal("chat ids stored with empty environment")
 		}
 	})
 
-	t.Run("env var wins over build-time chat id", func(t *testing.T) {
+	t.Run("runtime env seeds chat id", func(t *testing.T) {
 		db, ctx := newSeedDB(t)
 		t.Setenv(EnvTelegramChatID, "666")
-		buildTelegramChatID = "555"
 		SeedTelegramChatIDsFromEnv(ctx, db, discard)
 		if got, _ := storedChatIDs(t, ctx, db); got != "666" {
 			t.Fatalf("chat ids = %q; want 666", got)
